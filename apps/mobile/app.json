@@ -1,0 +1,59 @@
+{
+  "expo": {
+    "name": "Back 40",
+    "slug": "back40",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/brand/icon.png",
+    "scheme": "back40",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "bundleIdentifier": "com.back40app.app",
+      "supportsTablet": false,
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "Back 40 uses the microphone so you can talk your notes after a call."
+      }
+    },
+    "android": {
+      "package": "com.back40app.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#111111",
+        "foregroundImage": "./assets/brand/adaptive-foreground.png",
+        "backgroundImage": "./assets/brand/adaptive-background.png",
+        "monochromeImage": "./assets/brand/adaptive-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "output": "single",
+      "favicon": "./assets/brand/favicon.png",
+      "name": "Back 40",
+      "themeColor": "#111111"
+    },
+    "plugins": [
+      [
+        "expo-router",
+        {
+          "asyncRoutes": false
+        }
+      ],
+      "expo-font",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#0F1113",
+          "image": "./assets/brand/splash-mark.png",
+          "imageWidth": 120
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": false,
+      "reactCompiler": true
+    },
+    "extra": {
+      "supabaseUrl": "https://aqihksotebhmxjudfnuo.supabase.co",
+      "supabaseAnonKey": "sb_publishable_tHg-WkNT86VHiZSiU1N8og_YJ7uiVL_"
+    }
+  }
+}
