@@ -3,6 +3,8 @@
 // AI pipeline and the database all speak this shape, never a CRM's own shape.
 
 export type CrmKind = 'lofty' | 'followupboss' | 'gohighlevel';
+/** Where a lead lives: a CRM, or 'manual' when it was added by hand in Back 40. */
+export type LeadSourceKind = CrmKind | 'manual';
 
 export type Role = 'owner' | 'admin' | 'agent';
 
@@ -36,8 +38,8 @@ export interface TimelineItem {
 export interface Lead {
   id: string; // Back 40 id
   orgId: string;
-  crm: CrmKind;
-  crmLeadId: string; // id inside the CRM
+  crm: LeadSourceKind;
+  crmLeadId: string; // id inside the CRM (its own id for hand-added leads)
   assignedUserId: string | null;
   firstName: string;
   lastName: string;

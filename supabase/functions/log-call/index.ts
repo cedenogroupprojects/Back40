@@ -39,7 +39,7 @@ Deno.serve(async (req) => {
   ];
   if (body.followUpAt) jobs.push({ ...base, op: 'create_task', idempotency_key: k('task'), payload: { crmLeadId: lead.crm_lead_id, task: { title: 'Follow up (Back 40)', dueAt: body.followUpAt } } as never });
   if (body.stageChange) jobs.push({ ...base, op: 'update_lead', idempotency_key: k('stage'), payload: { crmLeadId: lead.crm_lead_id, patch: { stage: body.stageChange } } as never });
-  await db.from('sync_outbox').upsert(jobs, { onConflict: 'idempotency_key', ignoreDuplicates: true });
+  if (lead.connection_id) await db.from('sync_outbox').upsert(jobs, { onConflict: 'idempotency_key', ignoreDuplicates: true }); // hand-added leads stay in Back 40
 
   const LABEL: Record<string, string> = { talked: 'talked', voicemail: 'left voicemail', no_answer: 'no answer', attempted: 'attempted' };
   await db.from('timeline_items').insert({ org_id: lead.org_id, lead_id: lead.id, at: new Date().toISOString(), kind: 'call', title: `You called · ${LABEL[body.outcome] ?? body.outcome}`, body: body.note ?? null, source: 'back40', outcome: body.outcome, crm_ref: body.clientId });

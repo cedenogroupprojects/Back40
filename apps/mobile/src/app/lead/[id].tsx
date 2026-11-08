@@ -14,7 +14,7 @@ import { STATUS_TEXT, statusColor } from '@/lib/status';
 import { STAGES } from '@/data/sample';
 import { initials, money, relTime, useStore } from '@/data/store';
 import { callLead, textLead } from '@/lib/actions';
-import { CRM_NAME } from '@/lib/crm';
+import { SOURCE_NAME } from '@/lib/crm';
 import { useTheme } from '@/theme/ThemeProvider';
 import { font } from '@/theme/tokens';
 
@@ -69,7 +69,7 @@ export default function LeadDetail() {
           </T>
         </Row>
         <T size={12} tone="sub">
-          {lead.touches} touches · {lead.lastContactAt ? `last contact ${relTime(lead.lastContactAt)}` : 'never contacted'} · synced with {CRM_NAME[lead.crm]}
+          {lead.touches} touches · {lead.lastContactAt ? `last contact ${relTime(lead.lastContactAt)}` : 'never contacted'} · {lead.crm === 'manual' ? 'added in Back 40' : `synced with ${SOURCE_NAME[lead.crm]}`}
         </T>
       </View>
 
@@ -81,7 +81,7 @@ export default function LeadDetail() {
 
       <SectionLabel>Why now</SectionLabel>
       <Card style={{ gap: 4 }}>
-        <T size={16}>{lead.aiWhyNow ?? 'Recent activity in your CRM.'}</T>
+        <T size={16}>{lead.aiWhyNow ?? (lead.crm === 'manual' ? (lead.lastContactAt ? `You last reached out ${relTime(lead.lastContactAt)}.` : 'You added this lead. Make the first call.') : 'Recent activity in your CRM.')}</T>
         {lead.aiOpener ? (
           <T size={14} tone="sub">
             Try opening with "{lead.aiOpener}"
@@ -107,7 +107,7 @@ export default function LeadDetail() {
 
       <SectionLabel>Details</SectionLabel>
       <List>
-        <ListRow label="Phone" value={lead.phone ?? '—'} />
+        <ListRow label="Phone" value={lead.phone ? prettyPhone(lead.phone) : '—'} />
         <ListRow label="Came from" value={lead.source ?? '—'} />
         <ListRow label="Next follow-up" value={lead.nextFollowUpAt ? new Date(lead.nextFollowUpAt).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) : 'Not set'} />
         <ListRow
@@ -165,7 +165,7 @@ export default function LeadDetail() {
               </T>
             ) : null}
             <T size={12} tone="sub">
-              {h.source === 'back40' ? 'Back 40' : CRM_NAME[lead.crm]}
+              {h.source === 'back40' ? 'Back 40' : SOURCE_NAME[lead.crm]}
             </T>
           </View>
         ))}
@@ -173,4 +173,10 @@ export default function LeadDetail() {
       </List>
     </Screen>
   );
+}
+
+/** 9095550142 → (909) 555-0142; anything else stays as the CRM sent it. */
+function prettyPhone(p: string) {
+  const d = p.replace(/[^0-9]/g, '').replace(/^1(?=\d{10}$)/, '');
+  return d.length === 10 ? `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6)}` : p;
 }

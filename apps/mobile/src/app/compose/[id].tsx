@@ -8,7 +8,7 @@ import { Linking, Platform, TextInput, View } from 'react-native';
 import { Icon } from '@/components/Icon';
 import { Card, IconButton, Pill, Row, Screen, T, NavBar } from '@/components/ui';
 import { useStore } from '@/data/store';
-import { CRM_CAN_SEND, CRM_NAME } from '@/lib/crm';
+import { CRM_CAN_SEND, SOURCE_NAME } from '@/lib/crm';
 import { useTheme } from '@/theme/ThemeProvider';
 import { font } from '@/theme/tokens';
 
@@ -44,7 +44,7 @@ export default function Compose() {
     <Screen bottomSpace={40}>
       <NavBar title={`${channel === 'email' ? 'Email' : 'Text'} ${lead.firstName}`} onClose={() => router.back()} />
       <T size={13} tone="sub" style={{ paddingHorizontal: 4 }}>
-        Drafted from your {CRM_NAME[lead.crm]} notes. Edit anything.
+        {lead.crm === 'manual' ? 'Drafted from your notes. Edit anything.' : `Drafted from your ${SOURCE_NAME[lead.crm]} notes. Edit anything.`}
       </T>
       <Card>
         {channel === 'email' ? <TextInput value={subject} onChangeText={setSubject} accessibilityLabel="Subject" style={input} /> : null}
@@ -54,14 +54,14 @@ export default function Compose() {
         </T>
       </Card>
       <Pill
-        label={sent ? 'Sent' : viaCrm ? `Send via ${CRM_NAME[lead.crm]}` : `Open ${channel === 'email' ? 'Mail' : 'Messages'} + log it`}
+        label={sent ? 'Sent' : viaCrm ? `Send via ${SOURCE_NAME[lead.crm]}` : `Open ${channel === 'email' ? 'Mail' : 'Messages'} + log it`}
         icon="send"
         size="lg"
         disabled={!body.trim() || sent}
         onPress={send}
       />
       <T size={13} tone="sub" style={{ textAlign: 'center' }}>
-        {viaCrm ? `Sends from your ${CRM_NAME[lead.crm]} number and logs it there.` : `${CRM_NAME[lead.crm]} can't send messages from other apps, so we open your phone and log it to the lead.`}
+        {viaCrm ? `Sends from your ${SOURCE_NAME[lead.crm]} number and logs it there.` : lead.crm === 'manual' ? 'We open your phone and log it to the lead.' : `${SOURCE_NAME[lead.crm]} can't send messages from other apps, so we open your phone and log it to the lead.`}
       </T>
     </Screen>
   );

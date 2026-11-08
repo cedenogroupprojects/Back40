@@ -14,10 +14,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { groupByBucket, PIPELINE, type Bucket, type BucketId, type Lead } from '@back40/core';
 
 import { Icon } from '@/components/Icon';
-import { Card, Chip, List, ListRow, Row, Screen, T } from '@/components/ui';
+import { Card, Chip, IconButton, List, ListRow, Row, Screen, T } from '@/components/ui';
 import { money, relTime, useStore } from '@/data/store';
 import { tap } from '@/lib/actions';
-import { CRM_NAME } from '@/lib/crm';
+import { SOURCE_NAME } from '@/lib/crm';
 import { useTheme } from '@/theme/ThemeProvider';
 
 export default function Pipeline() {
@@ -43,13 +43,16 @@ export default function Pipeline() {
     const before = lead.stage;
     updateLead(lead.id, { stage: to.stage });
     if (timer.current) clearTimeout(timer.current);
-    setToast({ text: `${lead.firstName} moved to ${to.label}. Saved to ${CRM_NAME[lead.crm]}.`, undo: () => updateLead(lead.id, { stage: before }) });
+    setToast({ text: `${lead.firstName} moved to ${to.label}. Saved to ${SOURCE_NAME[lead.crm]}.`, undo: () => updateLead(lead.id, { stage: before }) });
     timer.current = setTimeout(() => setToast(null), 4000);
   };
 
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
-      <Screen title="Pipeline" kicker={`${PIPELINE.reduce((n, b) => n + groups[b.id].length, 0)} buyers`}>
+      <Screen
+        title="Pipeline"
+        kicker={`${PIPELINE.reduce((n, b) => n + groups[b.id].length, 0)} buyers`}
+        right={<IconButton icon="plus" label="Add a lead" tone="soft" onPress={() => router.push({ pathname: '/lead/new', params: { stage: PIPELINE[idx]!.stage } })} />}>
         {/* Potential commission: the number we never want an agent to miss. */}
         <Card style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 12 }}>
           <View style={{ flex: 1 }}>
@@ -78,7 +81,7 @@ export default function Pipeline() {
 
         {list.length === 0 ? (
           <List>
-            <ListRow label={`Nobody in ${PIPELINE[idx]!.label.toLowerCase()} right now`} />
+            <ListRow label={`Nobody in ${PIPELINE[idx]!.label.toLowerCase()} right now`} sub="Tap to add a lead here" onPress={() => router.push({ pathname: '/lead/new', params: { stage: PIPELINE[idx]!.stage } })} />
           </List>
         ) : (
           <List>

@@ -74,12 +74,16 @@ type Store = {
   updateLead: (id: string, patch: Partial<Pick<Lead, 'stage' | 'tags' | 'nextFollowUpAt'>>) => void;
   setCommission: (id: string, amount: number | null, basis?: { price: number; rate: number }) => void;
   addNote: (id: string, body: string) => void;
+  /** Add a lead by hand. Returns the new lead's id (or throws with a readable message). */
+  addLead: (input: NewLead) => Promise<string>;
   sendMessage: (leadId: string, channel: 'text' | 'email', body: string, opts?: { subject?: string; fromPhone?: boolean }) => void;
   decideDraft: (id: string, decision: 'sent' | 'skipped', body?: string) => void;
   reassign: (fromAgentId: string) => void;
   updateSettings: (patch: Partial<Settings>) => void;
   finishOnboarding: (patch: Partial<Settings>) => void;
 };
+
+export type NewLead = { firstName: string; lastName?: string; phone?: string; email?: string; stage: string; notes?: string };
 
 const Ctx = createContext<Store | null>(null);
 
@@ -144,13 +148,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         crm: p!.crm?.kind ?? null,
         rules: { ...s.rules, hotStages: p!.hotStages.length ? p!.hotStages : s.rules.hotStages },
       }));
-      if (!p.crm) {
-        // No CRM yet: let them in with an empty list and a prompt to connect.
-        setLeads([]);
-        setDrafts([]);
-        setStatus('ready');
-        return;
-      }
+      // No CRM is fine: hand-added leads still load, and Today offers to connect one.
       const monday = new Date();
       monday.setHours(0, 0, 0, 0);
       monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
@@ -270,6 +268,26 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     remote(live.leadAction(id, 'pin', { pinned: !was }));
   };
 
+  const addLead: Store['addLead'] = async (input) => {
+    if (liveRef.current) {
+      const r = (await live.leadAction('', 'create', { lead: input })) as unknown as { id: string };
+      if (profile) setLeads(await live.fetchLeads(profile.userId));
+      return r.id;
+    }
+    const now = new Date().toISOString();
+    const id = `local-${Date.now()}`;
+    const lead: Lead = {
+      id, orgId: 'demo', crm: 'manual', crmLeadId: id, assignedUserId: null,
+      firstName: input.firstName.trim(), lastName: (input.lastName ?? '').trim(),
+      phone: input.phone?.trim() || undefined, email: input.email?.trim() || undefined,
+      stage: input.stage, source: 'Added in Back 40', tags: [], createdAt: now,
+      lastContactAt: null, nextFollowUpAt: null, signals: [], fields: {}, pinned: false, touches: 0,
+      timeline: [{ id: `${Date.now()}`, at: now, kind: 'note', title: 'Added in Back 40', body: input.notes?.trim() || undefined, source: 'back40' }],
+    };
+    setLeads((ls) => [lead, ...ls]);
+    return id;
+  };
+
   const updateLead: Store['updateLead'] = (id, patch) => {
     setLeads((ls) => ls.map((l) => (l.id === id ? { ...l, ...patch } : l)));
     if (patch.stage) {
@@ -351,7 +369,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     score,
     streak,
     labelText: LABEL_TEXT,
-    logCall, togglePin, updateLead, setCommission, addNote, sendMessage, decideDraft, reassign, updateSettings, finishOnboarding,
+    logCall, togglePin, updateLead, setCommission, addNote, addLead, sendMessage, decideDraft, reassign, updateSettings, finishOnboarding,
   };
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

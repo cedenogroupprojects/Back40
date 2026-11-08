@@ -11,6 +11,8 @@
 //   follow_up   { at }                       (ISO time; creates a CRM task)
 //   pin         { pinned }
 //   assign      { userId }                   (team leaders only)
+//   create      { lead: { firstName, lastName?, phone?, email?, stage, source?, notes? } }
+//               adds a lead by hand (no leadId needed). Lives in Back 40 only.
 //   message     { channel: 'text'|'email', body, subject? }
 //               sends through the CRM when it can; otherwise logs what the
 //               agent sent from their phone.
@@ -25,7 +27,7 @@ const CAN_SEND: Record<string, { text: boolean; email: boolean }> = {
 
 type Body = {
   leadId: string;
-  action: 'stage' | 'note' | 'commission' | 'follow_up' | 'pin' | 'message' | 'assign';
+  action: 'stage' | 'note' | 'commission' | 'follow_up' | 'pin' | 'message' | 'assign' | 'create';
   clientId: string;
   stage?: string;
   body?: string;
@@ -38,6 +40,7 @@ type Body = {
   subject?: string;
   sentFromPhone?: boolean;
   userId?: string;
+  lead?: { firstName?: string; lastName?: string; phone?: string; email?: string; stage?: string; source?: string; notes?: string };
 };
 
 Deno.serve(async (req) => {
@@ -45,11 +48,12 @@ Deno.serve(async (req) => {
   if (pre) return pre;
   if (req.method !== 'POST') return json({ error: 'method' }, 405);
   const b = (await req.json().catch(() => ({}))) as Body;
-  if (!b.leadId || !b.action || !b.clientId) return json({ error: 'missing fields' }, 400);
+  if (!b.action || !b.clientId || (!b.leadId && b.action !== 'create')) return json({ error: 'missing fields' }, 400);
 
   // Row-level security proves this user can see the lead.
   const user = userClient(req);
   const { data: me } = await user.rpc('uid');
+  if (b.action === 'create') return createLead(user, me as string | null, b);
   const { data: lead } = await user.from('leads').select('id, org_id, connection_id, crm, crm_lead_id, fields, phone').eq('id', b.leadId).maybeSingle();
   if (!me || !lead) return json({ error: 'not found' }, 404);
 
@@ -57,8 +61,9 @@ Deno.serve(async (req) => {
   const now = new Date().toISOString();
   const base = { org_id: lead.org_id, connection_id: lead.connection_id, lead_id: lead.id };
   const key = (op: string) => `${b.clientId}:${op}`;
-  const queue = (op: string, payload: Record<string, unknown>) =>
-    db.from('sync_outbox').upsert({ ...base, op, idempotency_key: key(op), payload: { crmLeadId: lead.crm_lead_id, ...payload } }, { onConflict: 'idempotency_key', ignoreDuplicates: true });
+  // Hand-added leads have no CRM to write back to.
+  const queue = async (op: string, payload: Record<string, unknown>) =>
+    lead.crm === 'manual' || !lead.connection_id ? null : await db.from('sync_outbox').upsert({ ...base, op, idempotency_key: key(op), payload: { crmLeadId: lead.crm_lead_id, ...payload } }, { onConflict: 'idempotency_key', ignoreDuplicates: true });
   const timeline = (kind: string, title: string, body?: string) =>
     db.from('timeline_items').insert({ org_id: lead.org_id, lead_id: lead.id, at: now, kind, title, body: body ?? null, source: 'back40', crm_ref: b.clientId });
 
@@ -124,3 +129,37 @@ Deno.serve(async (req) => {
   }
   return json({ ok: true });
 });
+
+async function createLead(user: ReturnType<typeof userClient>, me: string | null, b: Body) {
+  if (!me) return json({ error: 'not signed in' }, 401);
+  const l = b.lead ?? {};
+  const firstName = (l.firstName ?? '').trim();
+  if (!firstName) return json({ error: 'Add a first name.' }, 400);
+  const { data: m } = await user.from('members').select('org_id').eq('user_id', me).limit(1).maybeSingle();
+  if (!m) return json({ error: 'No team found.' }, 400);
+  const db = serviceClient();
+  const id = crypto.randomUUID();
+  const now = new Date().toISOString();
+  const clean = (v?: string) => (v ?? '').trim() || null;
+  const { error } = await db.from('leads').insert({
+    id,
+    org_id: m.org_id,
+    connection_id: null,
+    crm: 'manual',
+    crm_lead_id: id,
+    assigned_user_id: me,
+    first_name: firstName,
+    last_name: (l.lastName ?? '').trim(),
+    phone: clean(l.phone),
+    email: clean(l.email)?.toLowerCase() ?? null,
+    stage: clean(l.stage) ?? 'New Lead',
+    source: clean(l.source) ?? 'Added in Back 40',
+    crm_created_at: now,
+    heat: 60,
+    label: 'brand_new',
+    updated_at: now,
+  });
+  if (error) return json({ error: error.message }, 400);
+  await db.from('timeline_items').insert({ org_id: m.org_id, lead_id: id, at: now, kind: 'note', title: 'Added in Back 40', body: clean(l.notes), source: 'back40', crm_ref: b.clientId });
+  return json({ ok: true, id });
+}

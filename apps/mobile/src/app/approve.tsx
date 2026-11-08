@@ -7,7 +7,7 @@ import { TextInput, View } from 'react-native';
 import { Icon } from '@/components/Icon';
 import { Avatar, Card, IconButton, Pill, Row, Screen, T, NavBar, List, ListRow, SectionLabel } from '@/components/ui';
 import { initials, useStore } from '@/data/store';
-import { CRM_NAME } from '@/lib/crm';
+import { SOURCE_NAME } from '@/lib/crm';
 import { useTheme } from '@/theme/ThemeProvider';
 import { font } from '@/theme/tokens';
 
@@ -55,7 +55,7 @@ export default function Approve() {
                 </T>
               </View>
               <T w="bold" size={12} tone="sub">
-                {d.channel === 'email' ? 'Email' : 'Text'} · {CRM_NAME[lead.crm]}
+                {d.channel === 'email' ? 'Email' : 'Text'} · {SOURCE_NAME[lead.crm]}
               </T>
             </Row>
             {editing ? (

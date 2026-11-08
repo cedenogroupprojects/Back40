@@ -18,6 +18,7 @@ function AppStack() {
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: c.bg } }}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="lead/[id]" />
+        <Stack.Screen name="lead/new" options={{ presentation: 'transparentModal', animation: 'slide_from_bottom' }} />
         <Stack.Screen name="log-call/[id]" options={{ presentation: 'transparentModal', animation: 'slide_from_bottom' }} />
         <Stack.Screen name="commission/[id]" options={{ presentation: 'transparentModal', animation: 'slide_from_bottom' }} />
         <Stack.Screen name="compose/[id]" options={{ presentation: 'modal' }} />

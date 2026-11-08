@@ -26,6 +26,7 @@ const PATHS = {
   sparkle: 'M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z',
   play: 'M7 4l13 8-13 8z',
   check: 'M5 12l5 5L20 7',
+  plus: 'M12 5v14M5 12h14',
   chevron: 'M9 18l6-6-6-6',
   send: 'M22 2L11 13M22 2l-7 20-4-9-9-4z',
 } as const;

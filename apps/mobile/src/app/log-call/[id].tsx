@@ -16,7 +16,7 @@ import { Card, Chip, Pill, Row, T } from '@/components/ui';
 import { extractFromNote, SAMPLE_TRANSCRIPT } from '@/data/demoAi';
 import { useStore } from '@/data/store';
 import { tap } from '@/lib/actions';
-import { CRM_NAME } from '@/lib/crm';
+import { SOURCE_NAME } from '@/lib/crm';
 import { useTheme } from '@/theme/ThemeProvider';
 import { font } from '@/theme/tokens';
 
@@ -112,7 +112,7 @@ export default function LogCall() {
           {saved !== null ? (
             <View style={{ gap: 16 }}>
               <T w="heavy" size={22}>
-                Saved to {CRM_NAME[lead.crm]}.
+                Saved to {SOURCE_NAME[lead.crm]}.
               </T>
               <View style={{ alignSelf: 'flex-start', backgroundColor: c.goodSoft, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 14 }}>
                 <T w="heavy" size={13} tone="good">
@@ -139,7 +139,7 @@ export default function LogCall() {
                 </Card>
               ) : recapSent ? (
                 <T w="bold" tone="good">
-                  Recap sent through {CRM_NAME[lead.crm]}.
+                  Recap sent through {SOURCE_NAME[lead.crm]}.
                 </T>
               ) : null}
               <Pill label="Done" kind="ink" onPress={() => router.back()} />
@@ -239,7 +239,7 @@ export default function LogCall() {
                 ))}
               </View>
 
-              <Pill label={`Save to ${CRM_NAME[lead.crm]}`} size="lg" onPress={save} style={{ marginTop: 8 }} />
+              <Pill label={`Save to ${SOURCE_NAME[lead.crm]}`} size="lg" onPress={save} style={{ marginTop: 8 }} />
               <Pressable accessibilityRole="button" onPress={close} style={{ alignSelf: 'center', padding: 10 }}>
                 <T w="semibold" tone="sub">
                   Skip — log as attempted
