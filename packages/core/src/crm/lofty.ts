@@ -1,0 +1,164 @@
+// Lofty adapter — first CRM for the pilot.
+// Docs: https://developer.lofty.com (REST, OAuth 2.0 or API key).
+// Base URL https://api.lofty.com. Webhooks: POST /v1.0/webhook with listId
+// 1-12 (2 = lead info, 3 = lead activity, 6 = call, 8 = text, 9 = note, 10 = task).
+//
+// Checked against developer.lofty.com on Nov 8, 2026 (see docs/CRM-API-CHECK.md).
+// Lines marked VERIFY still need a test call against a real account.
+//
+// Gotcha: Lofty returns HTTP 200 with an error body for many failures unless the
+// request sends `X-Error-Status: true`, so every request sends it.
+
+import { crmFetch, OUTCOME_TEXT, type CrmAdapter, type CrmCredentials, type CrmEvent, type CrmLeadInput } from './adapter.ts';
+
+const BASE = 'https://api.lofty.com';
+
+function headers(c: CrmCredentials): Record<string, string> {
+  // OAuth tokens use "Bearer", personal API keys use "token".
+  const scheme = c.accessToken.startsWith('oauth:') ? 'Bearer' : 'token';
+  const token = c.accessToken.replace(/^oauth:/, '');
+  return { Authorization: `${scheme} ${token}`, 'Content-Type': 'application/json', 'X-Error-Status': 'true' };
+}
+
+type LoftyLead = {
+  leadId: number | string;
+  firstName?: string;
+  lastName?: string;
+  emails?: (string | { email?: string; value?: string })[];
+  phones?: (string | { phone?: string; number?: string; value?: string })[];
+  stage?: string;
+  source?: string;
+  tags?: (string | { tagName: string })[];
+  createTime?: string | number;
+  lastTouch?: string;
+  lastVisit?: string;
+  assignedUserId?: number | null;
+  assigneeId?: number | null;
+};
+
+function toIso(v: string | number | undefined | null): string | null {
+  if (v === undefined || v === null || v === '') return null;
+  const d = typeof v === 'number' ? new Date(v) : new Date(v);
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
+}
+
+// Lofty returns contact arrays as strings or small objects depending on the endpoint.
+function first(list: unknown[] | undefined, keys: string[]): string | undefined {
+  const v = list?.[0];
+  if (typeof v === 'string') return v || undefined;
+  if (v && typeof v === 'object') for (const k of keys) if (typeof (v as Record<string, unknown>)[k] === 'string') return (v as Record<string, string>)[k];
+  return undefined;
+}
+
+export function mapLoftyLead(l: LoftyLead): CrmLeadInput {
+  const lastVisit = toIso(l.lastVisit);
+  return {
+    crm: 'lofty',
+    crmLeadId: String(l.leadId),
+    assignedUserId: (l.assignedUserId ?? l.assigneeId) != null ? String(l.assignedUserId ?? l.assigneeId) : null,
+    firstName: l.firstName ?? '',
+    lastName: l.lastName ?? '',
+    phone: first(l.phones, ['phone', 'number', 'value']),
+    email: first(l.emails, ['email', 'value']),
+    stage: l.stage ?? 'New Lead',
+    source: l.source,
+    tags: (l.tags ?? []).map((t) => (typeof t === 'string' ? t : t.tagName)),
+    createdAt: toIso(l.createTime) ?? new Date().toISOString(),
+    lastContactAt: toIso(l.lastTouch),
+    nextFollowUpAt: null,
+    signals: lastVisit ? [{ kind: 'site_visit', at: lastVisit }] : [],
+    fields: {},
+  };
+}
+
+export const lofty: CrmAdapter = {
+  kind: 'lofty',
+  capabilities: { sendText: true, sendEmail: true, logCall: true, webhooks: true, maxRequestsPerMinute: 120 },
+
+  async listLeads(c, cursor) {
+    const offset = Number(cursor ?? 0);
+    const limit = 100;
+    const res = (await crmFetch(`${BASE}/v1.0/leads?limit=${limit}&offset=${offset}&sort=LastActivity&desc=true`, {
+      headers: headers(c),
+    })) as { leads?: LoftyLead[] } | null;
+    const items = (res?.leads ?? []).map(mapLoftyLead);
+    return { items, nextCursor: items.length === limit ? String(offset + limit) : null };
+  },
+
+  async getLead(c, id) {
+    const res = (await crmFetch(`${BASE}/v1.0/leads/${id}`, { headers: headers(c) })) as LoftyLead | null;
+    return res ? mapLoftyLead(res) : null;
+  },
+
+  async addNote(c, id, body) {
+    await crmFetch(`${BASE}/v1.0/notes`, { method: 'POST', headers: headers(c), body: JSON.stringify({ leadId: Number(id), content: body }) });
+  },
+
+  async logCall(c, id, call) {
+    // Manual log: records a call made outside Lofty (on the agent's own phone),
+    // with a real outcome, on the lead's timeline. Needs the lead's phone number.
+    const outcome: Record<string, string | undefined> = { talked: 'Talked', voicemail: 'VoiceMessage', no_answer: 'NoAnswer', attempted: undefined };
+    const content = `${OUTCOME_TEXT[call.outcome]}${call.note ? ` — ${call.note}` : ''} (Back 40)`;
+    if (!call.phone) return this.addNote(c, id, `Call: ${content}`);
+    await crmFetch(`${BASE}/v1.0/logType`, {
+      method: 'POST',
+      headers: headers(c),
+      body: JSON.stringify({ leadId: Number(id), logType: 'logCall', content, leadPhoneNumber: call.phone.slice(0, 20), callingOutcome: outcome[call.outcome], outboundOrInbound: 'outbound' }),
+    });
+  },
+
+  async updateLead(c, id, patch) {
+    const body: Record<string, unknown> = {};
+    if (patch.stage) body.stage = patch.stage.slice(0, 19); // Lofty: stage under 20 characters
+    if (patch.tags) body.tags = patch.tags;
+    if (patch.assignedUserId) body.assignedUserId = Number(patch.assignedUserId);
+    if (patch.potentialCommission !== undefined) {
+      // VERIFY attributeType value for a number field (list via GET /v1.0/teamFeatures custom fields).
+      body.customAttributeList = [{ attributeName: 'Potential Commission', attributeType: 'number', value: patch.potentialCommission ?? '' }];
+    }
+    await crmFetch(`${BASE}/v1.0/leads/${id}`, { method: 'PUT', headers: headers(c), body: JSON.stringify(body) });
+  },
+
+  async createTask(c, id, task) {
+    // VERIFY field names on POST /v1.0/tasks.
+    await crmFetch(`${BASE}/v1.0/tasks`, {
+      method: 'POST',
+      headers: headers(c),
+      body: JSON.stringify({ leadId: Number(id), content: task.title, deadline: task.dueAt, type: 'Call' }),
+    });
+  },
+
+  async sendText(c, id, body) {
+    // Sends from the CALLER's Lofty virtual number, so this must run with the
+    // agent's own token (not the team owner's). Fails if they have no number.
+    await crmFetch(`${BASE}/v1.0/message/sms/send`, { method: 'POST', headers: headers(c), body: JSON.stringify({ leadId: Number(id), content: body }) });
+  },
+
+  async sendEmail(c, id, email) {
+    await crmFetch(`${BASE}/v1.0/message/email/send`, {
+      method: 'POST',
+      headers: headers(c),
+      body: JSON.stringify({ leadId: Number(id), subject: email.subject, content: email.body }),
+    });
+  },
+
+  parseWebhook(body): CrmEvent[] {
+    // Lofty batches events. Each subscription has a listId; we register one
+    // callback URL per listId (…/lofty?list=2) so the kind is known up front.
+    const b = (body ?? {}) as Record<string, unknown>;
+    const list = Number(b.listId ?? b.list ?? 0);
+    const kindByList: Record<number, CrmEvent['kind']> = { 2: 'lead_updated', 3: 'activity', 6: 'call', 7: 'email', 8: 'text', 9: 'note', 10: 'task' };
+    const ids = new Set<string>();
+    const walk = (v: unknown) => {
+      if (Array.isArray(v)) v.forEach(walk);
+      else if (v && typeof v === 'object') {
+        for (const [k, val] of Object.entries(v)) {
+          if (k === 'leadId' && (typeof val === 'string' || typeof val === 'number')) ids.add(String(val));
+          else walk(val);
+        }
+      }
+    };
+    walk(b);
+    return [{ crm: 'lofty', kind: kindByList[list] ?? 'other', crmLeadIds: [...ids], raw: body }];
+  },
+};

@@ -1,0 +1,11 @@
+{
+  "name": "back40",
+  "private": true,
+  "scripts": {
+    "test": "cd packages/core && node --test test/*.test.ts",
+    "core:sync": "rm -rf supabase/functions/_shared/core && cp -r packages/core/src supabase/functions/_shared/core",
+    "rls-check": "node supabase/tests/rls-check.mjs supabase/migrations/20261108000000_init.sql supabase/migrations/20261108020000_pipeline.sql",
+    "app": "cd apps/mobile && npx expo start",
+    "app:typecheck": "cd apps/mobile && npx tsc --noEmit"
+  }
+}
