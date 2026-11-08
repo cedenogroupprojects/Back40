@@ -145,7 +145,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         rules: { ...s.rules, hotStages: p!.hotStages.length ? p!.hotStages : s.rules.hotStages },
       }));
       if (!p.crm) {
-        setStatus('needs_crm');
+        // No CRM yet: let them in with an empty list and a prompt to connect.
+        setLeads([]);
+        setDrafts([]);
+        setStatus('ready');
         return;
       }
       const monday = new Date();

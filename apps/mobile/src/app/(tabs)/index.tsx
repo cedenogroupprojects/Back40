@@ -25,7 +25,8 @@ function greeting() {
 }
 
 export default function Today() {
-  const { today, streak, drafts, settings, notice, clearNotice, isLiveMode, status } = useStore();
+  const { today, streak, drafts, settings, notice, clearNotice, isLiveMode, status, profile } = useStore();
+  const needsCrm = isLiveMode && status === 'ready' && !profile?.crm;
   const [filter, setFilter] = useState<Filter>('all');
   const pending = drafts.filter((d) => d.status === 'pending').length;
   const date = new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
@@ -54,7 +55,11 @@ export default function Today() {
         </List>
       ) : null}
 
-      {shown.length ? (
+      {needsCrm ? (
+        <List>
+          <ListRow label="Connect your CRM" sub="Bring in your leads from Lofty or Follow Up Boss. Takes a minute." onPress={() => router.push('/connect')} />
+        </List>
+      ) : shown.length ? (
         <List inset={36}>
           {shown.map((item) => (
             <LeadRow key={item.lead.id} item={item} />

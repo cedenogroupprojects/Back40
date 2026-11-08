@@ -38,7 +38,6 @@ export default function TabLayout() {
       </View>
     );
   if (status === 'signed_out') return <Redirect href="/sign-in" />;
-  if (status === 'needs_crm') return <Redirect href="/connect" />;
   return (
     <Tabs>
       <TabSlot style={{ flex: 1 }} />

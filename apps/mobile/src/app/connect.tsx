@@ -28,7 +28,7 @@ export default function Connect() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<{ imported: number; more: boolean } | null>(null);
-  const firstTime = status === 'needs_crm';
+  const firstTime = false;
   const isAgent = profile?.role === 'agent';
 
   const connect = async () => {
