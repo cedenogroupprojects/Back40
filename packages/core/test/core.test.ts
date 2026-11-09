@@ -113,3 +113,15 @@ test('pipeline buckets follow the CRM stage', async () => {
   assert.equal(g.escrow.length, 1);
   assert.equal(g.contacted.length, 1);
 });
+
+test('Lofty: reads its GMT dates and buyer details', async () => {
+  const { mapLoftyLead } = await import('../src/crm/lofty.ts');
+  const l = mapLoftyLead({ leadId: 1, createTime: '2026-11-07T01:33:38GMT', lastTouch: '2026-11-07T01:33:44GMT', buyingTimeFrame: '3_to_6_', preQual: 'yes', score: 65, cannotText: true, assignedUserId: 9 } as never);
+  assert.equal(l.createdAt, '2026-11-07T01:33:38.000Z');
+  assert.equal(l.lastContactAt, '2026-11-07T01:33:44.000Z');
+  assert.equal(l.fields.timeline, '3–6 months');
+  assert.equal(l.fields.preApproved, true);
+  assert.equal(l.fields.crmScore, 65);
+  assert.equal(l.fields.doNotText, true);
+  assert.equal(l.assignedUserId, '9');
+});

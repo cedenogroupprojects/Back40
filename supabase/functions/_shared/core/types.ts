@@ -74,6 +74,11 @@ export interface LeadFields {
   /** What the agent used to work it out: price × rate. */
   purchasePrice?: number;
   commissionRate?: number; // percent, e.g. 2.5
+  /** From the CRM: its own 0–100 lead score, and contact restrictions. */
+  crmScore?: number;
+  doNotCall?: boolean;
+  doNotText?: boolean;
+  doNotEmail?: boolean;
 }
 
 export interface HotRules {

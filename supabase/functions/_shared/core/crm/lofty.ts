@@ -34,11 +34,24 @@ type LoftyLead = {
   lastVisit?: string;
   assignedUserId?: number | null;
   assigneeId?: number | null;
+  buyingTimeFrame?: string | null;
+  preQual?: string | null;
+  score?: number | null;
+  leadInquiry?: { priceMax?: number; priceMin?: number } | null;
+  cannotCall?: boolean;
+  cannotText?: boolean;
+  cannotEmail?: boolean;
+};
+
+// Lofty's buyingTimeFrame codes → words an agent would say.
+const TIMEFRAME: Record<string, string> = {
+  '0_to_3_': '0–3 months', '3_to_6_': '3–6 months', '6_to_12_': '6–12 months', '12_plus_': '12+ months', just_looking: 'Just looking',
 };
 
 function toIso(v: string | number | undefined | null): string | null {
   if (v === undefined || v === null || v === '') return null;
-  const d = typeof v === 'number' ? new Date(v) : new Date(v);
+  // Lofty sends "2026-11-07T01:33:38GMT", which JavaScript can't read as-is.
+  const d = typeof v === 'number' ? new Date(v) : new Date(String(v).replace(/GMT$/, 'Z'));
   return Number.isNaN(d.getTime()) ? null : d.toISOString();
 }
 
@@ -67,8 +80,20 @@ export function mapLoftyLead(l: LoftyLead): CrmLeadInput {
     lastContactAt: toIso(l.lastTouch),
     nextFollowUpAt: null,
     signals: lastVisit ? [{ kind: 'site_visit', at: lastVisit }] : [],
-    fields: {},
+    fields: loftyFields(l),
   };
+}
+
+function loftyFields(l: LoftyLead): CrmLeadInput['fields'] {
+  const f: CrmLeadInput['fields'] = {};
+  if (l.buyingTimeFrame) f.timeline = TIMEFRAME[l.buyingTimeFrame] ?? l.buyingTimeFrame.replace(/_/g, ' ').trim();
+  if (l.preQual) f.preApproved = l.preQual.toLowerCase() === 'yes';
+  if (typeof l.score === 'number') f.crmScore = l.score;
+  if (l.leadInquiry?.priceMax && l.leadInquiry.priceMax > 0) f.budgetMax = l.leadInquiry.priceMax;
+  if (l.cannotCall) f.doNotCall = true;
+  if (l.cannotText) f.doNotText = true;
+  if (l.cannotEmail) f.doNotEmail = true;
+  return f;
 }
 
 export const lofty: CrmAdapter = {

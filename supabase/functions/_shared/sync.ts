@@ -5,6 +5,8 @@ import type { Connection, serviceClient } from './db.ts';
 
 type Db = ReturnType<typeof serviceClient>;
 
+export const DONE_STAGE = /^(closed|already bought|sold|agent|lender|vendor|trash|archived?|not interested|do not contact|dnc|spam|junk)$/i;
+
 export async function upsertLead(db: Db, conn: Connection, l: CrmLeadInput, isNew = false, onlyTeam = true) {
   // CRM assignee → Back 40 user. Only leads assigned to you in the CRM land on
   // your list. Leads for agents who haven't joined Back 40 yet stay unassigned
@@ -16,10 +18,12 @@ export async function upsertLead(db: Db, conn: Connection, l: CrmLeadInput, isNe
   }
   // Big teams have tens of thousands of leads. Only keep the ones that belong to
   // someone on Back 40 (or that we already have, so a reassignment moves it off a list).
-  if (!assigned && onlyTeam) {
-    const { data: had } = await db.from('leads').select('id').eq('connection_id', conn.id).eq('crm_lead_id', l.crmLeadId).maybeSingle();
-    if (!had) return null;
-  }
+  const { data: had } = await db.from('leads').select('id, fields').eq('connection_id', conn.id).eq('crm_lead_id', l.crmLeadId).maybeSingle();
+  if (!assigned && onlyTeam && !had) return null;
+  // Done deals and dead leads don't belong on a hot sheet; leave them in the CRM.
+  if (!had && DONE_STAGE.test(l.stage)) return null;
+  // CRM facts refresh; what the agent entered in Back 40 (commission etc.) is kept.
+  const fields = { ...((had?.fields as Record<string, unknown> | null) ?? {}), ...l.fields };
 
   const { data: settings } = await db.from('org_settings').select('hot_stages').eq('org_id', conn.org_id).maybeSingle();
   const rules = { ...DEFAULT_RULES, hotStages: settings?.hot_stages ?? DEFAULT_RULES.hotStages };
@@ -42,6 +46,7 @@ export async function upsertLead(db: Db, conn: Connection, l: CrmLeadInput, isNe
     crm_created_at: l.createdAt,
     last_contact_at: l.lastContactAt,
     signals: l.signals,
+    fields,
     heat: heatScore(lead, rules, now),
     label: labelFor(lead, rules, now),
     updated_at: new Date().toISOString(),
