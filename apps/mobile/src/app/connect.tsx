@@ -1,7 +1,7 @@
 // Connect the CRM. The team leader pastes their CRM API key once; the server
 // checks it, stores it in a vault (it never comes back to the phone), imports
 // leads, and turns on live updates.
-import { router } from 'expo-router';
+import { Redirect, router } from 'expo-router';
 import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, TextInput, View } from 'react-native';
 
@@ -16,7 +16,7 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { font } from '@/theme/tokens';
 
 const HELP: Partial<Record<CrmKind, string>> = {
-  lofty: 'In Lofty: Settings → Integrations → API → Generate API key. Copy the whole key and paste it here.',
+  lofty: 'In Lofty: Settings → Integrations → API Keys → Create API Key. Name it Back 40, copy it and paste it here.',
   followupboss: 'In Follow Up Boss: Admin → API → Create API key. Copy it and paste it here.',
 };
 
@@ -29,6 +29,7 @@ export default function Connect() {
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<{ imported: number; more: boolean } | null>(null);
   const firstTime = false;
+  // Connecting needs an account: sign in first, then come right back here.
   const isAgent = profile?.role === 'agent';
 
   const connect = async () => {
@@ -49,6 +50,8 @@ export default function Connect() {
     await reload();
     router.replace('/');
   };
+
+  if (status === 'signed_out') return <Redirect href={{ pathname: '/sign-in', params: { next: '/connect' } }} />;
 
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, backgroundColor: c.bg }}>

@@ -1,6 +1,6 @@
 // Sign in / create account. Accounts are created ready to use (no email
 // confirmation step), so an agent can get going from their phone in a minute.
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, TextInput, View } from 'react-native';
 
@@ -12,6 +12,7 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { font } from '@/theme/tokens';
 
 export default function SignIn() {
+  const { next } = useLocalSearchParams<{ next?: string }>();
   const { c } = useTheme();
   const { enterDemo, reload } = useStore();
   const [mode, setMode] = useState<'in' | 'up'>('in');
@@ -34,7 +35,7 @@ export default function SignIn() {
       if (mode === 'up') await signUp(name.trim(), email, password, team.trim());
       else await signIn(email, password);
       await reload();
-      router.replace('/');
+      router.replace(next === '/connect' ? '/connect' : '/');
     } catch (e) {
       setError((e as Error).message);
     } finally {
