@@ -65,7 +65,7 @@ export default function LeadDetail() {
         <Row gap={6}>
           <Dot color={color} />
           <T size={14} tone="body">
-            {STATUS_TEXT[label]} · {lead.stage}
+            {STATUS_TEXT[label].toLowerCase() === lead.stage.toLowerCase() ? lead.stage : `${STATUS_TEXT[label]} · ${lead.stage}`}
           </T>
         </Row>
         <T size={12} tone="sub">

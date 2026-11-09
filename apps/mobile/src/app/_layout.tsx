@@ -10,6 +10,13 @@ import { ThemeProvider, useTheme } from '@/theme/ThemeProvider';
 
 SplashScreen.preventAutoHideAsync();
 
+// Web build: no browser focus boxes around text fields (the app shows its own caret).
+if (typeof document !== 'undefined') {
+  const st = document.createElement('style');
+  st.textContent = 'input, textarea { outline: none !important; }';
+  document.head.appendChild(st);
+}
+
 function AppStack() {
   const { c, isDark } = useTheme();
   return (
@@ -18,7 +25,7 @@ function AppStack() {
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: c.bg } }}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="lead/[id]" />
-        <Stack.Screen name="lead/new" options={{ presentation: 'transparentModal', animation: 'slide_from_bottom' }} />
+        <Stack.Screen name="lead/new" options={{ presentation: 'modal' }} />
         <Stack.Screen name="log-call/[id]" options={{ presentation: 'transparentModal', animation: 'slide_from_bottom' }} />
         <Stack.Screen name="commission/[id]" options={{ presentation: 'transparentModal', animation: 'slide_from_bottom' }} />
         <Stack.Screen name="compose/[id]" options={{ presentation: 'modal' }} />

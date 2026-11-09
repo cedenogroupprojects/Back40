@@ -1,18 +1,23 @@
-// Add a lead by hand — for agents without a CRM, or who'd rather not connect one.
-// Slim bottom sheet, same look as the commission sheet: name, phone, email, stage, note.
-// Hand-added leads live in Back 40 (they don't get pushed into a CRM).
+// New lead — for agents without a CRM, or who'd rather not connect one.
+// Modeled on iPhone's "New Contact": Cancel · title · Add in the bar, a live
+// monogram, grouped rows with labels on the left. Stage and commission open in
+// place instead of throwing a wall of fields at you.
+// Hand-added leads live in Back 40 (they aren't pushed into a CRM).
 import { router, useLocalSearchParams } from 'expo-router';
-import { useRef, useState, type ComponentRef, type Ref } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, TextInput, View, type TextInputProps } from 'react-native';
+import { useRef, useState, type ComponentRef, type ReactNode, type Ref } from 'react';
+import { KeyboardAvoidingView, LayoutAnimation, Platform, Pressable, ScrollView, TextInput, View, type TextInputProps } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { PIPELINE } from '@back40/core';
 
-import { Chip, Pill, Row, T } from '@/components/ui';
-import { useStore } from '@/data/store';
+import { Icon } from '@/components/Icon';
+import { HAIRLINE, Row, T } from '@/components/ui';
+import { money, useStore } from '@/data/store';
 import { tap } from '@/lib/actions';
 import { useTheme } from '@/theme/ThemeProvider';
 import { font } from '@/theme/tokens';
+
+type Input = ComponentRef<typeof TextInput>;
 
 /** (909) 555-0142 as they type. */
 const phoneText = (s: string) => {
@@ -21,25 +26,45 @@ const phoneText = (s: string) => {
   if (d.length < 7) return `(${d.slice(0, 3)}) ${d.slice(3)}`;
   return `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6)}`;
 };
+const digits = (s: string) => Number(s.replace(/[^0-9]/g, '')) || 0;
+const rateText = (s: string) => {
+  const [a = '', ...rest] = s.replace(/[^0-9.]/g, '').split('.');
+  return rest.length ? `${a}.${rest.join('').slice(0, 3)}` : a;
+};
+const ease = () => LayoutAnimation.configureNext(LayoutAnimation.create(180, 'easeInEaseOut', 'opacity'));
 
 export default function NewLead() {
   const params = useLocalSearchParams<{ stage?: string }>();
   const { c } = useTheme();
   const insets = useSafeAreaInsets();
-  const { addLead } = useStore();
+  const { addLead, setCommission } = useStore();
+
   const [first, setFirst] = useState('');
   const [last, setLast] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [note, setNote] = useState('');
-  const [stage, setStage] = useState(PIPELINE.find((b) => b.stage === params.stage)?.stage ?? PIPELINE[0]!.stage);
+  const [stage, setStage] = useState(PIPELINE.find((b) => b.stage === params.stage) ?? PIPELINE[0]!);
+  const [price, setPrice] = useState('');
+  const [rate, setRate] = useState('');
+  const [open, setOpen] = useState<'stage' | 'commission' | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const lastRef = useRef<ComponentRef<typeof TextInput>>(null);
-  const phoneRef = useRef<ComponentRef<typeof TextInput>>(null);
-  const emailRef = useRef<ComponentRef<typeof TextInput>>(null);
+  const lastRef = useRef<Input>(null);
+  const phoneRef = useRef<Input>(null);
+  const emailRef = useRef<Input>(null);
+  const rateRef = useRef<Input>(null);
 
+  const p = digits(price);
+  const r = Number(rate) || 0;
+  const commission = Math.round((p * r) / 100);
   const canSave = first.trim().length > 0 && !busy;
+  const mono = `${first.trim()[0] ?? ''}${last.trim()[0] ?? ''}`.toUpperCase();
+
+  const toggle = (which: 'stage' | 'commission') => {
+    ease();
+    setOpen((o) => (o === which ? null : which));
+  };
 
   const save = async () => {
     if (!canSave) return;
@@ -47,7 +72,8 @@ export default function NewLead() {
     setBusy(true);
     setError(null);
     try {
-      const id = await addLead({ firstName: first, lastName: last, phone: phone.replace(/[^0-9+]/g, '') || undefined, email: email || undefined, stage, notes: note || undefined });
+      const id = await addLead({ firstName: first, lastName: last, phone: phone.replace(/[^0-9+]/g, '') || undefined, email: email.trim() || undefined, stage: stage.stage, notes: note.trim() || undefined });
+      if (commission > 0) setCommission(id, commission, { price: p, rate: r });
       router.replace(`/lead/${id}`);
     } catch (e) {
       setError((e as Error).message || 'Could not add the lead. Try again.');
@@ -55,79 +81,186 @@ export default function NewLead() {
     }
   };
 
-  // outlineWidth: 0 hides the browser's focus box on the web build.
-  const input = { ...font('regular'), fontSize: 17, color: c.text, flex: 1, minWidth: 0, paddingVertical: 0, outlineWidth: 0 } as const;
-  const line = { minHeight: 50, paddingHorizontal: 16 } as const;
-  const sep = <View style={{ height: 1, backgroundColor: c.track, marginLeft: 16 }} />;
-  const field = (props: TextInputProps & { inputRef?: Ref<ComponentRef<typeof TextInput>> }) => {
-    const { inputRef, ...rest } = props;
-    return <TextInput ref={inputRef} placeholderTextColor={c.sub} style={input} {...rest} />;
+  // ─── pieces ───
+  const field = (props: TextInputProps & { inputRef?: Ref<Input>; align?: 'left' | 'right' }) => {
+    const { inputRef, align = 'left', style, ...rest } = props;
+    return (
+      <TextInput
+        ref={inputRef}
+        placeholderTextColor={c.sub}
+        selectionColor={c.accent}
+        style={[{ ...font('regular'), fontSize: 17, color: c.text, flex: 1, minWidth: 0, paddingVertical: 0, textAlign: align, outlineWidth: 0, ...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as object) : null) }, style]}
+        {...rest}
+      />
+    );
   };
+  const group = (children: ReactNode) => <View style={{ backgroundColor: c.card, borderRadius: 14, overflow: 'hidden' }}>{children}</View>;
+  const sep = (inset = 16) => <View style={{ height: HAIRLINE, backgroundColor: c.sep, marginLeft: inset }} />;
+  const labeled = (label: string, child: ReactNode) => (
+    <Row gap={0} style={{ minHeight: 48, paddingHorizontal: 16 }}>
+      <T size={15} style={{ width: 84, color: c.accentText }}>
+        {label}
+      </T>
+      {child}
+    </Row>
+  );
+  const disclosure = (label: string, value: ReactNode, which: 'stage' | 'commission') => (
+    <Pressable accessibilityRole="button" accessibilityState={{ expanded: open === which }} onPress={() => toggle(which)} style={({ pressed }) => ({ backgroundColor: pressed ? c.soft : 'transparent' })}>
+      <Row style={{ minHeight: 48, paddingHorizontal: 16, justifyContent: 'space-between' }}>
+        <T size={17}>{label}</T>
+        <Row gap={6}>
+          {value}
+          <View style={{ transform: [{ rotate: open === which ? '90deg' : '0deg' }] }}>
+            <Icon name="chevron" size={15} color={c.sub} width={2.2} />
+          </View>
+        </Row>
+      </Row>
+    </Pressable>
+  );
 
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-      <Pressable accessibilityLabel="Close" onPress={() => router.back()} style={{ flex: 1, minHeight: 60, backgroundColor: 'rgba(0,0,0,0.35)' }} />
-      <View style={{ backgroundColor: c.bg, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingTop: 10, paddingBottom: insets.bottom + 16, gap: 14, maxHeight: '92%' }}>
-        <View style={{ alignSelf: 'center', width: 36, height: 4, borderRadius: 2, backgroundColor: c.track }} />
-        <Row style={{ paddingHorizontal: 20, justifyContent: 'space-between' }}>
-          <T w="heavy" size={19}>
-            Add a lead
+    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, backgroundColor: c.bg }}>
+      {/* Bar: Cancel · New Lead · Add */}
+      <Row style={{ paddingTop: Platform.OS === 'ios' ? 14 : insets.top + 10, paddingBottom: 10, paddingHorizontal: 16, justifyContent: 'space-between' }}>
+        <Pressable accessibilityRole="button" onPress={() => router.back()} hitSlop={10} style={{ minWidth: 64 }}>
+          <T size={17} style={{ color: c.accentText }}>
+            Cancel
           </T>
-          <Pressable accessibilityRole="button" onPress={() => router.back()} hitSlop={10}>
-            <T size={16} tone="sub">
-              Cancel
-            </T>
-          </Pressable>
-        </Row>
+        </Pressable>
+        <T w="semibold" size={17}>
+          New Lead
+        </T>
+        <Pressable accessibilityRole="button" accessibilityState={{ disabled: !canSave }} onPress={save} hitSlop={10} style={{ minWidth: 64, alignItems: 'flex-end' }}>
+          <T w="semibold" size={17} style={{ color: canSave ? c.accentText : c.sub }}>
+            {busy ? 'Adding…' : 'Add'}
+          </T>
+        </Pressable>
+      </Row>
 
-        <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: 20, gap: 14 }}>
-          <View style={{ backgroundColor: c.card, borderRadius: 16, overflow: 'hidden' }}>
-            <Row style={line}>
+      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: insets.bottom + 32, gap: 22 }}>
+        {/* Monogram fills in as you type */}
+        <View style={{ alignItems: 'center', gap: 8, paddingTop: 6 }}>
+          <View style={{ width: 88, height: 88, borderRadius: 44, backgroundColor: mono ? c.hotSoft : c.soft, alignItems: 'center', justifyContent: 'center' }}>
+            {mono ? (
+              <T w="semibold" size={34} style={{ color: c.accentText }}>
+                {mono}
+              </T>
+            ) : (
+              <Icon name="me" size={38} color={c.sub} width={1.6} />
+            )}
+          </View>
+          <T size={13} tone="sub">
+            Goes into {stage.label} on your pipeline
+          </T>
+        </View>
+
+        {group(
+          <>
+            <View style={{ minHeight: 48, justifyContent: 'center', paddingHorizontal: 16 }}>
               {field({ value: first, onChangeText: setFirst, placeholder: 'First name', autoFocus: true, autoCapitalize: 'words', autoComplete: 'off', returnKeyType: 'next', onSubmitEditing: () => lastRef.current?.focus(), accessibilityLabel: 'First name' })}
-            </Row>
-            {sep}
-            <Row style={line}>
+            </View>
+            {sep()}
+            <View style={{ minHeight: 48, justifyContent: 'center', paddingHorizontal: 16 }}>
               {field({ inputRef: lastRef, value: last, onChangeText: setLast, placeholder: 'Last name', autoCapitalize: 'words', autoComplete: 'off', returnKeyType: 'next', onSubmitEditing: () => phoneRef.current?.focus(), accessibilityLabel: 'Last name' })}
-            </Row>
-          </View>
+            </View>
+          </>,
+        )}
 
-          <View style={{ backgroundColor: c.card, borderRadius: 16, overflow: 'hidden' }}>
-            <Row style={line}>
-              {field({ inputRef: phoneRef, value: phone, onChangeText: (t) => setPhone(phoneText(t)), placeholder: 'Phone', keyboardType: 'phone-pad', autoComplete: 'off', accessibilityLabel: 'Phone' })}
-            </Row>
-            {sep}
-            <Row style={line}>
-              {field({ inputRef: emailRef, value: email, onChangeText: setEmail, placeholder: 'Email', keyboardType: 'email-address', autoCapitalize: 'none', autoCorrect: false, autoComplete: 'off', accessibilityLabel: 'Email' })}
-            </Row>
-          </View>
+        {group(
+          <>
+            {labeled('mobile', field({ inputRef: phoneRef, value: phone, onChangeText: (t) => setPhone(phoneText(t)), placeholder: '(909) 555-0142', keyboardType: 'phone-pad', autoComplete: 'off', returnKeyType: 'next', onSubmitEditing: () => emailRef.current?.focus(), accessibilityLabel: 'Phone' }))}
+            {sep()}
+            {labeled('email', field({ inputRef: emailRef, value: email, onChangeText: setEmail, placeholder: 'name@email.com', keyboardType: 'email-address', autoCapitalize: 'none', autoCorrect: false, autoComplete: 'off', accessibilityLabel: 'Email' }))}
+          </>,
+        )}
 
-          <View style={{ gap: 8 }}>
-            <T w="medium" size={13} tone="sub" style={{ paddingHorizontal: 4 }}>
-              Stage
-            </T>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" style={{ marginHorizontal: -20 }} contentContainerStyle={{ gap: 6, paddingHorizontal: 20 }}>
-              {PIPELINE.map((b) => (
-                <Chip key={b.id} label={b.label} on={stage === b.stage} onPress={() => setStage(b.stage)} />
-              ))}
-            </ScrollView>
-          </View>
+        {group(
+          <>
+            {disclosure(
+              'Stage',
+              <T size={17} tone="sub">
+                {stage.label}
+              </T>,
+              'stage',
+            )}
+            {open === 'stage'
+              ? PIPELINE.map((b) => (
+                  <View key={b.id}>
+                    {sep(32)}
+                    <Pressable
+                      accessibilityRole="radio"
+                      accessibilityState={{ checked: b.id === stage.id }}
+                      onPress={() => {
+                        tap();
+                        ease();
+                        setStage(b);
+                        setOpen(null);
+                      }}
+                      style={({ pressed }) => ({ backgroundColor: pressed ? c.soft : 'transparent' })}>
+                      <Row style={{ minHeight: 44, paddingLeft: 32, paddingRight: 16, justifyContent: 'space-between' }}>
+                        <T size={16} tone={b.id === stage.id ? 'text' : 'body'} w={b.id === stage.id ? 'semibold' : 'regular'}>
+                          {b.label}
+                        </T>
+                        {b.id === stage.id ? <Icon name="check" size={17} color={c.accent} width={2.4} /> : null}
+                      </Row>
+                    </Pressable>
+                  </View>
+                ))
+              : null}
+            {sep()}
+            {disclosure(
+              'Commission',
+              commission ? (
+                <T w="semibold" size={17} tone="good">
+                  {money(commission, false)}
+                </T>
+              ) : (
+                <T size={17} tone="sub">
+                  Optional
+                </T>
+              ),
+              'commission',
+            )}
+            {open === 'commission' ? (
+              <>
+                {sep(32)}
+                <Row gap={0} style={{ minHeight: 44, paddingLeft: 32, paddingRight: 16 }}>
+                  <T size={16} tone="body" style={{ flex: 1 }}>
+                    Purchase price
+                  </T>
+                  {field({ value: p ? `$${p.toLocaleString('en-US')}` : '', onChangeText: setPrice, placeholder: '$650,000', keyboardType: 'number-pad', autoFocus: true, align: 'right', returnKeyType: 'next', onSubmitEditing: () => rateRef.current?.focus(), accessibilityLabel: 'Purchase price', style: { maxWidth: 150, ...font('semibold') } })}
+                </Row>
+                {sep(32)}
+                <Row gap={2} style={{ minHeight: 44, paddingLeft: 32, paddingRight: 16 }}>
+                  <T size={16} tone="body" style={{ flex: 1 }}>
+                    Commission
+                  </T>
+                  {field({ inputRef: rateRef, value: rate, onChangeText: (t) => setRate(rateText(t)), placeholder: '2.5', keyboardType: 'decimal-pad', align: 'right', accessibilityLabel: 'Commission percent', style: { maxWidth: 60, ...font('semibold') } })}
+                  <T w="semibold" size={17} tone={rate ? 'text' : 'sub'}>
+                    %
+                  </T>
+                </Row>
+              </>
+            ) : null}
+          </>,
+        )}
 
-          <View style={{ backgroundColor: c.card, borderRadius: 16, paddingHorizontal: 16, paddingVertical: 12 }}>
-            {field({ value: note, onChangeText: setNote, placeholder: 'Note (optional)', multiline: true, style: [input, { minHeight: 44, textAlignVertical: 'top' }], accessibilityLabel: 'Note' })}
-          </View>
+        {group(
+          <View style={{ paddingHorizontal: 16, paddingVertical: 13 }}>
+            {field({ value: note, onChangeText: setNote, placeholder: 'Notes', multiline: true, accessibilityLabel: 'Notes', style: { minHeight: 66, textAlignVertical: 'top' } })}
+          </View>,
+        )}
 
-          {error ? (
-            <T size={14} style={{ paddingHorizontal: 4, color: c.accentText }}>
-              {error}
-            </T>
-          ) : null}
-
-          <Pill label={busy ? 'Adding…' : 'Add lead'} size="lg" disabled={!canSave} onPress={save} />
-          <T size={12} tone="sub" style={{ textAlign: 'center' }}>
-            Saved in Back 40. It won’t be added to a CRM.
+        {error ? (
+          <T size={14} style={{ color: c.accentText, textAlign: 'center' }}>
+            {error}
           </T>
-        </ScrollView>
-      </View>
+        ) : null}
+
+        <T size={12} tone="sub" style={{ textAlign: 'center', marginTop: -8 }}>
+          Saved in Back 40 only. It won’t be added to a CRM.
+        </T>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 }
