@@ -164,6 +164,8 @@ export function subscribeToLeads(onChange: () => void) {
 
 export const connectCrm = (kind: CrmKind, apiKey: string) => fn<{ ok: boolean; imported: number; mine?: number; matchedYou?: boolean; more: boolean; webhooks: number }>('connect-crm', { kind, apiKey });
 
+export const disconnectCrm = (kind: CrmKind) => fn<{ ok: boolean; removed: number }>('connect-crm', { kind, action: 'disconnect' });
+
 export const leadAction = (leadId: string, action: string, extra: Record<string, unknown> = {}) => fn('lead-action', { leadId, action, clientId: clientId(), ...extra });
 
 export const logCallRemote = (payload: Record<string, unknown>) => fn<{ ok: boolean; points: number }>('log-call', { ...payload, clientId: clientId() });

@@ -186,13 +186,15 @@ export function List({ children, style, inset = 16 }: { children: ReactNode; sty
   );
 }
 
-export function ListRow({ label, value, valueTone, onPress, right, sub, left }: { label: string; value?: ReactNode; valueTone?: string; onPress?: () => void; right?: ReactNode; sub?: string; left?: ReactNode }) {
+export function ListRow({ label, value, valueTone, onPress, right, sub, left, destructive }: { label: string; value?: ReactNode; valueTone?: string; onPress?: () => void; right?: ReactNode; sub?: string; left?: ReactNode; destructive?: boolean }) {
   const { c } = useTheme();
   const body = (
     <View style={{ minHeight: 46, paddingHorizontal: 16, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
       {left}
       <View style={{ flex: 1 }}>
-        <T size={16}>{label}</T>
+        <T size={16} style={destructive ? { color: c.accentText } : undefined}>
+          {label}
+        </T>
         {sub ? (
           <T size={13} tone="sub">
             {sub}
@@ -205,7 +207,7 @@ export function ListRow({ label, value, valueTone, onPress, right, sub, left }: 
         </T>
       ) : null}
       {right}
-      {onPress ? <Icon name="chevron" size={15} color={c.sub} width={2.2} /> : null}
+      {onPress && !destructive ? <Icon name="chevron" size={15} color={c.sub} width={2.2} /> : null}
     </View>
   );
   return onPress ? (

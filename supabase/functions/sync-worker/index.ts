@@ -10,7 +10,7 @@ import { ADAPTERS, CrmError } from '../_shared/core/index.ts';
 import { backoffSeconds, credentialsFor, json, preflight, serviceClient, type Connection } from '../_shared/db.ts';
 import { upsertLead } from '../_shared/sync.ts';
 
-const BACKFILL_MAX_PAGES = 10; // first import: the 1,000 most recently active leads
+const BACKFILL_MAX_PAGES = 50; // first import, per agent: up to 5,000 of their most recently active leads
 
 const db = serviceClient();
 
@@ -46,13 +46,13 @@ async function processInbox() {
       const creds = await credentialsFor(db, conn);
       if (job.kind === 'backfill') {
         // First import, one page per job so a big CRM never times out.
-        const raw = job.raw as { cursor?: string | null; page?: number };
+        const raw = job.raw as { cursor?: string | null; page?: number; assignee?: string };
         await throttle(conn.id, adapter.capabilities.maxRequestsPerMinute);
-        const page = await adapter.listLeads(creds, raw.cursor ?? null);
+        const page = await adapter.listLeads(creds, raw.cursor ?? null, { assignedTo: raw.assignee });
         for (const l of page.items) await upsertLead(db, conn, l);
         const n = (raw.page ?? 1) + 1;
         if (page.nextCursor && n <= BACKFILL_MAX_PAGES) {
-          await db.from('sync_inbox').insert({ connection_id: conn.id, crm: conn.kind, kind: 'backfill', raw: { cursor: page.nextCursor, page: n } });
+          await db.from('sync_inbox').insert({ connection_id: conn.id, crm: conn.kind, kind: 'backfill', raw: { cursor: page.nextCursor, page: n, assignee: raw.assignee } });
         }
         await db.from('crm_connections').update({ last_synced_at: new Date().toISOString() }).eq('id', conn.id);
         await db.from('sync_inbox').update({ processed_at: new Date().toISOString(), last_error: null }).eq('id', job.id);

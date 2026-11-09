@@ -51,9 +51,10 @@ export const goHighLevel: CrmAdapter = {
   kind: 'gohighlevel',
   capabilities: { sendText: true, sendEmail: true, logCall: true, webhooks: true, maxRequestsPerMinute: 100 },
 
-  async listLeads(c, cursor) {
+  async listLeads(c, cursor, opts) {
     const after = cursor ? `&startAfterId=${cursor}` : '';
-    const res = (await crmFetch(`${BASE}/contacts/?locationId=${c.accountId}&limit=100${after}`, { headers: headers(c) })) as { contacts?: GhlContact[] } | null;
+    const who = opts?.assignedTo ? `&assignedTo=${encodeURIComponent(opts.assignedTo)}` : ''; // VERIFY against GHL
+    const res = (await crmFetch(`${BASE}/contacts/?locationId=${c.accountId}&limit=100${after}${who}`, { headers: headers(c) })) as { contacts?: GhlContact[] } | null;
     const items = (res?.contacts ?? []).map(mapGhlContact);
     return { items, nextCursor: items.length === 100 ? items[items.length - 1]!.crmLeadId : null };
   },

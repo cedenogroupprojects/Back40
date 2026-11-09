@@ -75,10 +75,12 @@ export const lofty: CrmAdapter = {
   kind: 'lofty',
   capabilities: { sendText: true, sendEmail: true, logCall: true, webhooks: true, maxRequestsPerMinute: 120 },
 
-  async listLeads(c, cursor) {
+  async listLeads(c, cursor, opts) {
     const offset = Number(cursor ?? 0);
     const limit = 100;
-    const res = (await crmFetch(`${BASE}/v1.0/leads?limit=${limit}&offset=${offset}&sort=LastActivity&desc=true`, {
+    // assignedUserId filter verified against the live API (returns only that agent's leads).
+    const who = opts?.assignedTo ? `&assignedUserId=${encodeURIComponent(opts.assignedTo)}` : '';
+    const res = (await crmFetch(`${BASE}/v1.0/leads?limit=${limit}&offset=${offset}&sort=LastActivity&desc=true${who}`, {
       headers: headers(c),
     })) as { leads?: LoftyLead[] } | null;
     const items = (res?.leads ?? []).map(mapLoftyLead);

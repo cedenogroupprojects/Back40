@@ -63,11 +63,12 @@ export const followUpBoss: CrmAdapter = {
   kind: 'followupboss',
   capabilities: { sendText: false, sendEmail: false, logCall: true, webhooks: true, maxRequestsPerMinute: 120 },
 
-  async listLeads(c, cursor, updatedSince) {
+  async listLeads(c, cursor, opts) {
     const offset = Number(cursor ?? 0);
     const limit = 100;
-    const since = updatedSince ? `&updatedAfter=${encodeURIComponent(updatedSince)}` : '';
-    const res = (await crmFetch(`${BASE}/people?limit=${limit}&offset=${offset}&sort=-updated${since}`, { headers: headers(c) })) as { people?: FubPerson[] } | null;
+    const since = opts?.updatedSince ? `&updatedAfter=${encodeURIComponent(opts.updatedSince)}` : '';
+    const who = opts?.assignedTo ? `&assignedUserId=${encodeURIComponent(opts.assignedTo)}` : '';
+    const res = (await crmFetch(`${BASE}/people?limit=${limit}&offset=${offset}&sort=-updated${since}${who}`, { headers: headers(c) })) as { people?: FubPerson[] } | null;
     const items = (res?.people ?? []).map(mapFubPerson);
     return { items, nextCursor: items.length === limit ? String(offset + limit) : null };
   },

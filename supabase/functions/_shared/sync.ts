@@ -5,7 +5,7 @@ import type { Connection, serviceClient } from './db.ts';
 
 type Db = ReturnType<typeof serviceClient>;
 
-export async function upsertLead(db: Db, conn: Connection, l: CrmLeadInput, isNew = false) {
+export async function upsertLead(db: Db, conn: Connection, l: CrmLeadInput, isNew = false, onlyTeam = true) {
   // CRM assignee → Back 40 user. Only leads assigned to you in the CRM land on
   // your list. Leads for agents who haven't joined Back 40 yet stay unassigned
   // (team leaders see them in Team admin) and move to the agent when they link.
@@ -13,6 +13,12 @@ export async function upsertLead(db: Db, conn: Connection, l: CrmLeadInput, isNe
   if (l.assignedUserId) {
     const { data: member } = await db.from('members').select('user_id').eq('org_id', conn.org_id).eq('crm_user_id', l.assignedUserId).maybeSingle();
     assigned = member?.user_id ?? null;
+  }
+  // Big teams have tens of thousands of leads. Only keep the ones that belong to
+  // someone on Back 40 (or that we already have, so a reassignment moves it off a list).
+  if (!assigned && onlyTeam) {
+    const { data: had } = await db.from('leads').select('id').eq('connection_id', conn.id).eq('crm_lead_id', l.crmLeadId).maybeSingle();
+    if (!had) return null;
   }
 
   const { data: settings } = await db.from('org_settings').select('hot_stages').eq('org_id', conn.org_id).maybeSingle();

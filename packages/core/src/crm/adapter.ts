@@ -45,7 +45,8 @@ export interface CrmAdapter {
   kind: CrmKind;
   capabilities: CrmCapabilities;
 
-  listLeads(creds: CrmCredentials, cursor: string | null, updatedSince?: string): Promise<Page<CrmLeadInput>>;
+  /** One page of leads. `assignedTo` (a CRM user id) limits it to that person's leads. */
+  listLeads(creds: CrmCredentials, cursor: string | null, opts?: { updatedSince?: string; assignedTo?: string }): Promise<Page<CrmLeadInput>>;
   getLead(creds: CrmCredentials, crmLeadId: string): Promise<CrmLeadInput | null>;
 
   addNote(creds: CrmCredentials, crmLeadId: string, body: string): Promise<void>;
