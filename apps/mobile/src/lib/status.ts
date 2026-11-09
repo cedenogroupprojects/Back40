@@ -12,6 +12,7 @@ export const STATUS_TEXT: Record<LeadLabel, string> = {
   slipping: 'Going cold',
   back_again: 'Back looking',
   pinned: 'Pinned',
+  working: 'Working',
 };
 
 export function statusColor(label: LeadLabel, c: Palette): string {

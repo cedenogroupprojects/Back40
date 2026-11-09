@@ -17,7 +17,8 @@ export type LeadLabel =
   | 'follow_up'
   | 'slipping'
   | 'back_again'
-  | 'pinned';
+  | 'pinned'
+  | 'working'; // in a hot stage and recently worked: nothing urgent
 
 export interface ActivitySignal {
   kind: 'listing_view' | 'site_visit' | 'email_open' | 'email_reply' | 'text_reply' | 'search';

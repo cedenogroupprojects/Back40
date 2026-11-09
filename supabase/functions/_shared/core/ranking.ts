@@ -80,12 +80,14 @@ export function labelFor(lead: Lead, rules: HotRules, now: number): LeadLabel {
   if (isHotStage(lead, rules) && recentSignals(lead, now, 72) > 0) return 'hot_now';
   if (followUpDue(lead, now)) return 'follow_up';
   if (lead.pinned) return 'pinned';
-  return 'hot_now';
+  // In play and recently worked. Not urgent, so it doesn't count as hot.
+  return 'working';
 }
 
 export const LABEL_TEXT: Record<LeadLabel, string> = {
   brand_new: 'Brand new lead',
   hot_now: 'Hot right now',
+  working: 'In your pipeline',
   promised: 'You promised a call',
   follow_up: 'Follow up today',
   slipping: 'Slipping away',
@@ -111,6 +113,8 @@ function fallbackReason(lead: Lead, label: LeadLabel, now: number): string {
     }
     case 'follow_up':
       return 'Follow-up is due today.';
+    case 'working':
+      return `${lead.stage}. Last contact ${Math.max(0, Math.round(daysSinceContact(lead, now)))} days ago.`;
     default:
       return 'You pinned this lead.';
   }
