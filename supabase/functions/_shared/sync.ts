@@ -6,14 +6,14 @@ import type { Connection, serviceClient } from './db.ts';
 type Db = ReturnType<typeof serviceClient>;
 
 export async function upsertLead(db: Db, conn: Connection, l: CrmLeadInput, isNew = false) {
-  // CRM assignee → Back 40 user. Until agents link their CRM user, leads land
-  // with the person who connected the CRM (the team leader sees everything anyway).
+  // CRM assignee → Back 40 user. Only leads assigned to you in the CRM land on
+  // your list. Leads for agents who haven't joined Back 40 yet stay unassigned
+  // (team leaders see them in Team admin) and move to the agent when they link.
   let assigned: string | null = null;
   if (l.assignedUserId) {
     const { data: member } = await db.from('members').select('user_id').eq('org_id', conn.org_id).eq('crm_user_id', l.assignedUserId).maybeSingle();
     assigned = member?.user_id ?? null;
   }
-  assigned ??= conn.owner_user_id;
 
   const { data: settings } = await db.from('org_settings').select('hot_stages').eq('org_id', conn.org_id).maybeSingle();
   const rules = { ...DEFAULT_RULES, hotStages: settings?.hot_stages ?? DEFAULT_RULES.hotStages };
@@ -25,6 +25,7 @@ export async function upsertLead(db: Db, conn: Connection, l: CrmLeadInput, isNe
     crm: conn.kind,
     crm_lead_id: l.crmLeadId,
     assigned_user_id: assigned,
+    crm_assignee_id: l.assignedUserId ?? null,
     first_name: l.firstName,
     last_name: l.lastName,
     phone: l.phone ?? null,

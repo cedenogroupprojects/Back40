@@ -162,7 +162,7 @@ export function subscribeToLeads(onChange: () => void) {
 
 // ───────────────────────── Writes (all go through the server) ─────────────────────────
 
-export const connectCrm = (kind: CrmKind, apiKey: string) => fn<{ ok: boolean; imported: number; more: boolean; webhooks: number }>('connect-crm', { kind, apiKey });
+export const connectCrm = (kind: CrmKind, apiKey: string) => fn<{ ok: boolean; imported: number; mine?: number; matchedYou?: boolean; more: boolean; webhooks: number }>('connect-crm', { kind, apiKey });
 
 export const leadAction = (leadId: string, action: string, extra: Record<string, unknown> = {}) => fn('lead-action', { leadId, action, clientId: clientId(), ...extra });
 

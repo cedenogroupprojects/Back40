@@ -27,7 +27,7 @@ export default function Connect() {
   const [key, setKey] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [done, setDone] = useState<{ imported: number; more: boolean } | null>(null);
+  const [done, setDone] = useState<{ imported: number; mine: number; matchedYou: boolean; more: boolean } | null>(null);
   const firstTime = false;
   // Connecting needs an account: sign in first, then come right back here.
   const isAgent = profile?.role === 'agent';
@@ -37,7 +37,7 @@ export default function Connect() {
     setBusy(true);
     try {
       const r = await connectCrm(kind, key.trim());
-      setDone({ imported: r.imported, more: r.more });
+      setDone({ imported: r.imported, mine: r.mine ?? 0, matchedYou: r.matchedYou ?? false, more: r.more });
       setKey('');
     } catch (e) {
       setError((e as Error).message);
@@ -63,7 +63,9 @@ export default function Connect() {
           </T>
           <T size={15} tone="sub">
             {done
-              ? `${done.imported} leads imported${done.more ? '. The rest are coming in over the next few minutes' : ''}. Changes in ${CRM_NAME[kind]} now show up here, and what you do here saves back to ${CRM_NAME[kind]}.`
+              ? done.matchedYou
+                ? `${done.mine} of the first ${done.imported} leads are assigned to you in ${CRM_NAME[kind]}, so they're on your list. Your agents' leads stay with them${done.more ? '. The rest are coming in over the next few minutes' : ''}.`
+                : `${done.imported} leads found${done.more ? ', more coming in' : ''}. We couldn't tell which ones are yours in ${CRM_NAME[kind]} yet, so none were put on your list. We'll fix that from our side.`
               : 'Back 40 reads your leads and saves your calls, notes and stage changes back. Your key is stored encrypted and never leaves our server.'}
           </T>
         </View>

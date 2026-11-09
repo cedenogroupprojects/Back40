@@ -41,6 +41,23 @@ Deno.serve(async (req) => {
     return json({ error: status === 401 || status === 403 ? `${kind === 'lofty' ? 'Lofty' : 'Your CRM'} didn't accept that key. Double-check it and try again.` : `Couldn't reach ${kind === 'lofty' ? 'Lofty' : 'your CRM'} (${status ?? 'network'}). Try again in a minute.` }, 400);
   }
 
+  // 1b. Whose key is this? Leads assigned to this CRM user are yours; the rest
+  //     belong to your agents. (Lofty: GET /v1.0/me.)
+  let crmUserId: string | null = null;
+  if (kind === 'lofty') {
+    const res = await fetch('https://api.lofty.com/v1.0/me', { headers: { Authorization: `token ${key}`, 'X-Error-Status': 'true' } }).catch(() => null);
+    const body = res?.ok ? ((await res.json().catch(() => null)) as Record<string, unknown> | null) : null;
+    const pick = (o: unknown): unknown => {
+      if (!o || typeof o !== 'object') return null;
+      const r = o as Record<string, unknown>;
+      return r.userId ?? r.id ?? r.agentId ?? pick(r.user) ?? pick(r.data);
+    };
+    const id = pick(body);
+    crmUserId = id != null ? String(id) : null;
+    console.log('lofty me', res?.status, body ? Object.keys(body).join(',') : 'none', crmUserId ? 'id found' : 'no id');
+  }
+  if (crmUserId) await db.from('members').update({ crm_user_id: crmUserId }).eq('org_id', member.org_id).eq('user_id', me);
+
   // 2. Key → Vault.
   const { data: secretRef, error: vErr } = await db.rpc('store_crm_secret', { secret_name: `crm:${member.org_id}:${kind}`, secret: key });
   if (vErr) return json({ error: 'Could not save the key securely.' }, 500);
@@ -80,5 +97,6 @@ Deno.serve(async (req) => {
     }
   }
 
-  return json({ ok: true, imported, more: Boolean(first.nextCursor), webhooks });
+  const { count: mine } = await db.from('leads').select('id', { count: 'exact', head: true }).eq('connection_id', conn.id).eq('assigned_user_id', me);
+  return json({ ok: true, imported, mine: mine ?? 0, matchedYou: Boolean(crmUserId), more: Boolean(first.nextCursor), webhooks });
 });
