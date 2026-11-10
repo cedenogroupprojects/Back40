@@ -125,3 +125,39 @@ test('Lofty: reads its GMT dates and buyer details', async () => {
   assert.equal(l.fields.doNotText, true);
   assert.equal(l.assignedUserId, '9');
 });
+
+test('Lofty: search area, price range and text consent', () => {
+  const l = mapLoftyLead({ leadId: 2, leadInquiry: { priceMin: 400000, priceMax: 800000, bedroomsMin: -1, locations: [{ city: 'Fontana' }] }, phoneConsentStates: ['System Recorded consent'] } as never);
+  assert.deepEqual(l.fields.areas, ['Fontana']);
+  assert.equal(l.fields.budgetMin, 400000);
+  assert.equal(l.fields.budgetMax, 800000);
+  assert.equal(l.fields.bedsMin, undefined);
+  assert.equal(l.fields.textConsent, true);
+});
+
+test('nurture: cadence, channel and touch choice', async () => {
+  const n = await import('../src/nurture.ts');
+  assert.equal(n.cadenceDays({ timeline: '0–3 months' }), 7);
+  assert.equal(n.cadenceDays({ timeline: '6–12 months' }), 30);
+  assert.equal(n.cadenceDays({}), 21);
+  const lead = { phone: '9095550142', email: 'a@b.com', fields: {} };
+  assert.equal(n.pickChannel(lead, ['text', 'email']), 'text');
+  assert.equal(n.pickChannel(lead, ['text', 'email'], true), 'email'); // auto needs recorded consent to text
+  assert.equal(n.pickChannel({ ...lead, fields: { doNotText: true, doNotEmail: true } }, ['text', 'email']), null);
+  assert.equal(n.touchKind({}, 0, { home: false, community: false }), 'discovery');
+  assert.equal(n.touchKind({ areas: ['Chino'] }, 0, { home: true, community: true }), 'home');
+  assert.equal(n.touchKind({ areas: ['Chino'] }, 2, { home: true, community: true }), 'community');
+  const now = Date.parse('2026-11-09T12:00:00Z');
+  assert.equal(n.nurtureEligible({ createdAt: '2026-11-08T12:00:00Z', lastContactAt: null, fields: {}, pinned: false }, now), false);
+  assert.equal(n.nurtureEligible({ createdAt: '2026-09-01T12:00:00Z', lastContactAt: '2026-10-01T12:00:00Z', fields: {}, pinned: false }, now), true);
+});
+
+test('nurture: rotates discovery questions; normalizes Lofty timeframes', async () => {
+  const n = await import('../src/nurture.ts');
+  assert.equal(n.nextQuestion({}, 0), 'area');
+  assert.equal(n.nextQuestion({}, 1), 'price');
+  assert.equal(n.nextQuestion({ areas: ['Chino'] }, 0), 'price');
+  assert.equal(n.nextQuestion({ areas: ['Chino'], budgetMax: 700000, timeline: '0–3 months', bedsMin: 3 }, 0), 'open');
+  assert.ok(n.DONE_STAGE.test('Closed') && !n.DONE_STAGE.test('Contacted'));
+  assert.equal(mapLoftyLead({ leadId: 3, buyingTimeFrame: '3-6' } as never).fields.timeline, '3–6 months');
+});

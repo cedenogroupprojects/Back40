@@ -78,7 +78,7 @@ export default function Today() {
 
       <SectionLabel>Ready for you</SectionLabel>
       <List>
-        {pending > 0 ? <ListRow label="Texts to approve" value={String(pending)} onPress={() => router.push('/approve')} /> : null}
+        {pending > 0 ? <ListRow label="Messages to approve" sub="Keeping in touch with your other leads" value={String(pending)} onPress={() => router.push('/approve')} /> : null}
         <ListRow label="Morning briefing" value="2 min" onPress={() => router.push('/briefing')} />
       </List>
       <T size={12} tone="sub" style={{ textAlign: 'center', marginTop: 4 }}>

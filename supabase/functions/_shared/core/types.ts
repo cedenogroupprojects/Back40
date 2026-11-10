@@ -65,6 +65,8 @@ export interface Lead {
 
 export interface LeadFields {
   budgetMax?: number;
+  budgetMin?: number;
+  bedsMin?: number;
   downPayment?: number;
   timeline?: string;
   beds?: number;
@@ -80,6 +82,8 @@ export interface LeadFields {
   doNotCall?: boolean;
   doNotText?: boolean;
   doNotEmail?: boolean;
+  /** The CRM has recorded consent to text this lead. */
+  textConsent?: boolean;
 }
 
 export interface HotRules {
@@ -110,11 +114,13 @@ export interface Draft {
   id: string;
   leadId: string;
   channel: 'text' | 'email';
-  play: 'speed_to_lead' | 'no_answer' | 'back40_sweep' | 'recap' | 'ask';
+  play: 'speed_to_lead' | 'no_answer' | 'back40_sweep' | 'recap' | 'ask' | 'nurture';
   body: string;
   subject?: string;
   why: string;
   status: 'pending' | 'sent' | 'skipped';
+  /** The home or new-build community this message features (nurture). */
+  home?: import('./nurture.ts').HomeCard | null;
 }
 
 export interface Agent {

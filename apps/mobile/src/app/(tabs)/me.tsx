@@ -140,9 +140,9 @@ export default function Me() {
         <Toggle label="Streak at risk" value={settings.nudges.streak} onChange={(v) => setNudge('streak', v)} />
       </Section>
 
-      <Section title="AI" note="Autopilot is off by default. Messages always wait for your approval unless you turn it on for a play.">
+      <Section title="AI" note="Messages wait for your approval unless you choose “Send for me” in Nurture.">
         <Toggle label="Learn my writing voice" sub="From your past sent texts" value={settings.voiceProfile} onChange={(v) => updateSettings({ voiceProfile: v })} />
-        <Toggle label="Autopilot for Nurture leads" sub="Sends approved-style check-ins without a tap" value={settings.autopilotNurture} onChange={(v) => updateSettings({ autopilotNurture: v })} />
+        <ListRow label="Nurture" sub="Keep in touch with everyone not on Today" onPress={() => router.push('/nurture')} />
       </Section>
 
       <Section plain title="Appearance">

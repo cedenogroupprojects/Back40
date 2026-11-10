@@ -142,8 +142,8 @@ export async function fetchTimeline(leadId: string): Promise<TimelineItem[]> {
 }
 
 export async function fetchDrafts(userId: string): Promise<Draft[]> {
-  const { data } = await supabase().from('drafts').select('id, lead_id, channel, play, subject, body, why, status').eq('user_id', userId).eq('status', 'pending').order('created_at', { ascending: false }).limit(20);
-  return (data ?? []).map((d) => ({ id: d.id, leadId: d.lead_id, channel: d.channel, play: d.play, subject: d.subject ?? undefined, body: d.body, why: d.why, status: d.status })) as Draft[];
+  const { data } = await supabase().from('drafts').select('id, lead_id, channel, play, subject, body, why, status, home').eq('user_id', userId).eq('status', 'pending').is('send_after', null).order('created_at', { ascending: true }).limit(60);
+  return (data ?? []).map((d) => ({ id: d.id, leadId: d.lead_id, channel: d.channel, play: d.play, subject: d.subject ?? undefined, body: d.body, why: d.why, status: d.status, home: d.home ?? null })) as Draft[];
 }
 
 export async function fetchCallsSince(userId: string, sinceIso: string) {
@@ -163,6 +163,49 @@ export function subscribeToLeads(onChange: () => void) {
 // ───────────────────────── Writes (all go through the server) ─────────────────────────
 
 export const connectCrm = (kind: CrmKind, apiKey: string) => fn<{ ok: boolean; imported: number; mine?: number; matchedYou?: boolean; more: boolean; webhooks: number }>('connect-crm', { kind, apiKey });
+
+// ───────────────────────── Nurture ─────────────────────────
+
+export type NurtureSettings = { enabled: boolean; mode: 'approve' | 'auto'; dailyLimit: number; channels: ('text' | 'email')[]; websiteUrl: string | null };
+export const NURTURE_DEFAULTS: NurtureSettings = { enabled: false, mode: 'approve', dailyLimit: 15, channels: ['text', 'email'], websiteUrl: null };
+
+export async function fetchNurture(orgId: string, userId: string): Promise<{ settings: NurtureSettings; active: number; dueThisWeek: number; stopped: number }> {
+  const db = supabase();
+  const weekAhead = new Date(Date.now() + 7 * 86_400_000).toISOString();
+  const [{ data: s }, active, due, stopped] = await Promise.all([
+    db.from('nurture_settings').select('enabled, mode, daily_limit, channels, website_url').eq('org_id', orgId).eq('user_id', userId).maybeSingle(),
+    db.from('nurture_state').select('lead_id', { count: 'exact', head: true }).eq('user_id', userId).eq('status', 'active'),
+    db.from('nurture_state').select('lead_id', { count: 'exact', head: true }).eq('user_id', userId).eq('status', 'active').lte('next_at', weekAhead),
+    db.from('nurture_state').select('lead_id', { count: 'exact', head: true }).eq('user_id', userId).neq('status', 'active'),
+  ]);
+  return {
+    settings: s ? { enabled: s.enabled, mode: s.mode, dailyLimit: s.daily_limit, channels: s.channels, websiteUrl: s.website_url } : NURTURE_DEFAULTS,
+    active: active.count ?? 0,
+    dueThisWeek: due.count ?? 0,
+    stopped: stopped.count ?? 0,
+  };
+}
+
+export async function saveNurture(orgId: string, userId: string, s: NurtureSettings) {
+  const { error } = await supabase().from('nurture_settings').upsert(
+    { org_id: orgId, user_id: userId, enabled: s.enabled, mode: s.mode, daily_limit: s.dailyLimit, channels: s.channels, website_url: s.websiteUrl, updated_at: new Date().toISOString() },
+    { onConflict: 'org_id,user_id' },
+  );
+  if (error) throw error;
+}
+
+/** Write today's messages now instead of waiting for the morning run. */
+export const runNurtureNow = (limit?: number) => fn<{ ok: boolean; drafted: number }>('nurture', { preview: true, limit });
+
+export async function nurtureFor(leadId: string) {
+  const { data } = await supabase().from('nurture_state').select('status, step, next_at, last_sent_at, stop_reason').eq('lead_id', leadId).maybeSingle();
+  return data as { status: string; step: number; next_at: string; last_sent_at: string | null; stop_reason: string | null } | null;
+}
+
+export async function setNurturePaused(leadId: string, paused: boolean) {
+  const { error } = await supabase().from('nurture_state').update({ status: paused ? 'paused' : 'active', updated_at: new Date().toISOString() }).eq('lead_id', leadId);
+  if (error) throw error;
+}
 
 export const disconnectCrm = (kind: CrmKind) => fn<{ ok: boolean; removed: number }>('connect-crm', { kind, action: 'disconnect' });
 

@@ -37,7 +37,9 @@ type LoftyLead = {
   buyingTimeFrame?: string | null;
   preQual?: string | null;
   score?: number | null;
-  leadInquiry?: { priceMax?: number; priceMin?: number } | null;
+  leadInquiry?: { priceMax?: number; priceMin?: number; bedroomsMin?: number; locations?: { city?: string | null; zipCode?: string | null }[] | null } | null;
+  phoneConsentStates?: string[] | null;
+  city?: string | null;
   cannotCall?: boolean;
   cannotText?: boolean;
   cannotEmail?: boolean;
@@ -86,10 +88,20 @@ export function mapLoftyLead(l: LoftyLead): CrmLeadInput {
 
 function loftyFields(l: LoftyLead): CrmLeadInput['fields'] {
   const f: CrmLeadInput['fields'] = {};
-  if (l.buyingTimeFrame) f.timeline = TIMEFRAME[l.buyingTimeFrame] ?? l.buyingTimeFrame.replace(/_/g, ' ').trim();
+  if (l.buyingTimeFrame) {
+    // Lofty sends codes like "3_to_6_", "3-6" or "12+". Normalize to "3–6 months".
+    const nums = l.buyingTimeFrame.match(/\d+/g);
+    f.timeline = TIMEFRAME[l.buyingTimeFrame] ?? (nums?.length === 2 ? `${nums[0]}–${nums[1]} months` : nums?.length === 1 ? `${nums[0]}+ months` : l.buyingTimeFrame.replace(/_/g, ' ').trim());
+  }
   if (l.preQual) f.preApproved = l.preQual.toLowerCase() === 'yes';
   if (typeof l.score === 'number') f.crmScore = l.score;
-  if (l.leadInquiry?.priceMax && l.leadInquiry.priceMax > 0) f.budgetMax = l.leadInquiry.priceMax;
+  const q = l.leadInquiry;
+  if (q?.priceMax && q.priceMax > 0) f.budgetMax = q.priceMax;
+  if (q?.priceMin && q.priceMin > 0) f.budgetMin = q.priceMin;
+  if (q?.bedroomsMin && q.bedroomsMin > 0) f.bedsMin = q.bedroomsMin;
+  const areas = [...new Set([...(q?.locations ?? []).map((x) => x.city?.trim()), l.city?.trim()].filter((x): x is string => !!x))];
+  if (areas.length) f.areas = areas;
+  if (l.phoneConsentStates?.some((s) => /consent/i.test(s))) f.textConsent = true;
   if (l.cannotCall) f.doNotCall = true;
   if (l.cannotText) f.doNotText = true;
   if (l.cannotEmail) f.doNotEmail = true;
@@ -189,3 +201,31 @@ export const lofty: CrmAdapter = {
     return [{ crm: 'lofty', kind: kindByList[list] ?? 'other', crmLeadIds: [...ids], raw: body }];
   },
 };
+
+// ── Listings (for nurture home matching) ──
+// POST /v2.0/listings/search (needs the key/app to have Listings → View).
+// The response shape isn't documented field-by-field, so this reads it defensively.
+export type ListingCriteria = { cities?: string[]; priceMin?: number; priceMax?: number; bedsMin?: number };
+
+export async function loftySearchListings(c: CrmCredentials, q: ListingCriteria, pageSize = 10): Promise<Record<string, unknown>[] | null> {
+  const filterConditions: Record<string, unknown> = {};
+  if (q.cities?.length) filterConditions.location = { city: q.cities };
+  if (q.priceMax) filterConditions.price = `${q.priceMin ?? ''},${q.priceMax}`;
+  if (q.bedsMin) filterConditions.beds = `${q.bedsMin},`;
+  const res = await fetch(`${BASE}/v2.0/listings/search`, {
+    method: 'POST',
+    headers: headers(c),
+    body: JSON.stringify({ searchScope: 'all', soldFlag: false, filterConditions, sortFields: ['LISTING_DATE_DESC'], pageSize, pageNum: 1 }),
+  });
+  if (res.status === 401 || res.status === 403) return null; // no listings permission
+  if (!res.ok) throw new Error(`lofty listings ${res.status}`);
+  const body = await res.json();
+  const found: Record<string, unknown>[] = [];
+  const walk = (v: unknown) => {
+    if (found.length) return;
+    if (Array.isArray(v) && v.length && typeof v[0] === 'object') found.push(...(v as Record<string, unknown>[]));
+    else if (v && typeof v === 'object') Object.values(v as Record<string, unknown>).forEach(walk);
+  };
+  walk(body);
+  return found;
+}

@@ -2,16 +2,55 @@
 // Nothing goes out without a tap (autopilot is opt-in per play).
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { TextInput, View } from 'react-native';
+import { Image, Linking, Pressable, TextInput, View } from 'react-native';
+
+import type { HomeCard } from '@back40/core';
 
 import { Icon } from '@/components/Icon';
 import { Avatar, Card, IconButton, Pill, Row, Screen, T, NavBar, List, ListRow, SectionLabel } from '@/components/ui';
-import { initials, useStore } from '@/data/store';
+import { initials, money, useStore } from '@/data/store';
 import { SOURCE_NAME } from '@/lib/crm';
 import { useTheme } from '@/theme/ThemeProvider';
 import { font } from '@/theme/tokens';
 
-const PLAY: Record<string, string> = { speed_to_lead: 'Brand new lead', no_answer: 'Didn’t answer', back40_sweep: 'Back on the market', recap: 'Follow-up', ask: 'You asked' };
+const PLAY: Record<string, string> = { speed_to_lead: 'Brand new lead', no_answer: 'Didn’t answer', back40_sweep: 'Back on the market', recap: 'Follow-up', ask: 'You asked', nurture: 'Keeping in touch' };
+
+/** The home or community a nurture message features. Tap to open the listing. */
+function Home({ h }: { h: HomeCard }) {
+  const { c } = useTheme();
+  const price = h.price ? money(h.price, false) : h.priceFrom ? `From ${money(h.priceFrom, false)}` : null;
+  const facts = [price, h.beds ? `${h.beds} bd` : null, h.baths ? `${h.baths} ba` : null].filter(Boolean).join(' · ');
+  const body = (
+    <Row gap={12} style={{ backgroundColor: c.soft, borderRadius: 14, padding: 10 }}>
+      {h.photo ? (
+        <Image source={{ uri: h.photo }} style={{ width: 64, height: 64, borderRadius: 10, backgroundColor: c.track }} accessibilityIgnoresInvertColors />
+      ) : (
+        <View style={{ width: 64, height: 64, borderRadius: 10, backgroundColor: c.card, alignItems: 'center', justifyContent: 'center' }}>
+          <Icon name={h.kind === 'community' ? 'board' : 'today'} size={24} color={c.sub} />
+        </View>
+      )}
+      <View style={{ flex: 1, gap: 2 }}>
+        <T size={11} w="semibold" tone="sub">
+          {h.kind === 'community' ? 'NEW-BUILD COMMUNITY' : 'HOME THAT FITS'}
+        </T>
+        <T w="semibold" size={15} numberOfLines={1}>
+          {h.title}
+        </T>
+        <T size={13} tone="sub" numberOfLines={1}>
+          {[h.kind === 'community' ? h.subtitle : null, h.city, facts].filter(Boolean).join(' · ')}
+        </T>
+      </View>
+      {h.url ? <Icon name="chevron" size={15} color={c.sub} width={2.2} /> : null}
+    </Row>
+  );
+  return h.url ? (
+    <Pressable accessibilityRole="link" accessibilityLabel={`Open ${h.title}`} onPress={() => void Linking.openURL(h.url!)}>
+      {body}
+    </Pressable>
+  ) : (
+    body
+  );
+}
 
 export default function Approve() {
   const { c } = useTheme();
@@ -22,6 +61,12 @@ export default function Approve() {
   const lead = d ? get(d.leadId) : undefined;
   const [editing, setEditing] = useState(false);
   const [body, setBody] = useState('');
+  const [confirmAll, setConfirmAll] = useState(false);
+  const sendAll = () => {
+    if (!confirmAll) return setConfirmAll(true);
+    for (const x of pending) decideDraft(x.id, 'sent');
+    setConfirmAll(false);
+  };
 
   return (
     <Screen bottomSpace={40}>
@@ -41,7 +86,7 @@ export default function Approve() {
             {pending.length} to send
           </T>
           <T size={14} tone="sub" style={{ paddingHorizontal: 4, marginTop: -6 }}>
-            Drafted from your CRM notes. Send, edit or skip.
+            Written from what your CRM knows about each person. Send, edit or skip.
           </T>
           <Card style={{ gap: 14 }}>
             <Row gap={12}>
@@ -72,6 +117,7 @@ export default function Approve() {
                 </T>
               </View>
             )}
+            {d.home ? <Home h={d.home} /> : null}
             <T size={13} tone="sub">
               <T w="semibold" size={13} tone="sub">
                 Why:{' '}
@@ -86,11 +132,20 @@ export default function Approve() {
           </Card>
           {pending.length > 1 ? (
             <>
+              <Pill label={confirmAll ? `Tap again to send all ${pending.length}` : `Send all ${pending.length}`} kind={confirmAll ? 'primary' : 'soft'} onPress={sendAll} />
+              {confirmAll ? (
+                <T size={13} tone="sub" style={{ textAlign: 'center', marginTop: -6 }}>
+                  Sends every message below as written.{' '}
+                  <T size={13} tone="accent" onPress={() => setConfirmAll(false)}>
+                    Cancel
+                  </T>
+                </T>
+              ) : null}
               <SectionLabel>Up next</SectionLabel>
               <List>
                 {pending.slice(1).map((x) => {
                   const l = get(x.leadId);
-                  return l ? <ListRow key={x.id} label={`${l.firstName} ${l.lastName}`} value={PLAY[x.play]} /> : null;
+                  return l ? <ListRow key={x.id} label={`${l.firstName} ${l.lastName}`} sub={x.body.slice(0, 70) + (x.body.length > 70 ? '…' : '')} value={x.home ? (x.home.kind === 'community' ? 'Community' : 'Home') : x.channel === 'email' ? 'Email' : 'Text'} /> : null;
                 })}
               </List>
             </>
