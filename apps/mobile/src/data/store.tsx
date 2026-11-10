@@ -87,6 +87,8 @@ type Store = {
   addLead: (input: NewLead) => Promise<string>;
   sendMessage: (leadId: string, channel: 'text' | 'email', body: string, opts?: { subject?: string; fromPhone?: boolean }) => void;
   decideDraft: (id: string, decision: 'sent' | 'skipped', body?: string) => void;
+  /** Swap the home on a nurture message; the message is rewritten around it. */
+  swapHome: (draftId: string, homeId: string) => Promise<void>;
   reassign: (fromAgentId: string) => void;
   updateSettings: (patch: Partial<Settings>) => void;
   finishOnboarding: (patch: Partial<Settings>) => void;
@@ -368,6 +370,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     if (liveRef.current) remote(Promise.resolve(live.supabase().from('drafts').update({ status: decision === 'sent' ? (body ? 'edited_sent' : 'sent') : 'skipped', decided_at: new Date().toISOString() }).eq('id', id)));
   };
 
+  const swapHome: Store['swapHome'] = async (draftId, homeId) => {
+    const d = drafts.find((x) => x.id === draftId);
+    const home = d?.homeOptions?.find((h) => h.id === homeId);
+    if (!d || !home) return;
+    if (!liveRef.current) {
+      setDrafts((ds) => ds.map((x) => (x.id === draftId ? { ...x, home } : x)));
+      return;
+    }
+    const next = await live.swapHome(draftId, homeId);
+    setDrafts((ds) => ds.map((x) => (x.id === draftId ? { ...x, body: next.body, subject: next.subject ?? undefined, why: next.why, home: next.home } : x)));
+  };
+
   const reassign = (fromAgentId: string) =>
     setTeam((t) => t.map((a) => (a.id === fromAgentId ? { ...a, staleHotLeads: 0 } : a.id === 'sam' ? { ...a, staleHotLeads: a.staleHotLeads } : a)));
 
@@ -400,7 +414,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     score,
     streak,
     labelText: LABEL_TEXT,
-    logCall, togglePin, updateLead, setCommission, addNote, addLead, sendMessage, decideDraft, reassign, updateSettings, finishOnboarding,
+    logCall, togglePin, updateLead, setCommission, addNote, addLead, sendMessage, decideDraft, swapHome, reassign, updateSettings, finishOnboarding,
   };
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

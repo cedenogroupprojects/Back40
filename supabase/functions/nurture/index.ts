@@ -13,12 +13,14 @@
 // Signed-in user, body { preview: true, limit?: number }: runs the same steps for
 // that agent right now (the "Get today's messages now" button / first run).
 import {
-  DONE_STAGE, firstTouchAt, loftySearchListings, nextTouchAt, nurtureEligible, nurturePrompt, pickChannel, touchKind,
-  type CrmKind, type HomeCard, type LeadFields,
+  criteriaFromNotesPrompt, DEAL_SEARCHES, DONE_STAGE, firstTouchAt, loftySearchListings, nextTouchAt, nurtureEligible, nurturePrompt, parseCriteria, pickChannel, touchKind,
+  type CrmKind, type DealKind, type HomeCard, type LeadFields,
 } from '../_shared/core/index.ts';
 import { credentialsFor, json, preflight, serviceClient, userClient, type Connection } from '../_shared/db.ts';
 
 const MODEL = Deno.env.get('AI_MODEL_SMART') ?? 'claude-sonnet-5-5';
+const FAST_MODEL = Deno.env.get('AI_MODEL_FAST') ?? 'claude-haiku-5-5';
+const HOME_OPTIONS = 5;
 const CAN_SEND: Record<string, boolean> = { lofty: true, gohighlevel: true }; // Follow Up Boss can't send through its API
 const db = serviceClient();
 
@@ -32,7 +34,7 @@ Deno.serve(async (req) => {
   const pre = preflight(req);
   if (pre) return pre;
   if (req.method !== 'POST') return json({ error: 'method' }, 405);
-  const body = (await req.json().catch(() => ({}))) as { preview?: boolean; limit?: number };
+  const body = (await req.json().catch(() => ({}))) as { preview?: boolean; limit?: number; action?: 'swap'; draftId?: string; homeId?: string };
 
   // Who's calling: the scheduler, or an agent asking for their batch now.
   const secret = req.headers.get('x-cron-secret');
@@ -58,6 +60,7 @@ Deno.serve(async (req) => {
   if (!me) return json({ error: 'Sign in first.' }, 401);
   const { data: member } = await db.from('members').select('org_id').eq('user_id', me).limit(1).maybeSingle();
   if (!member) return json({ error: 'No team found.' }, 400);
+  if (body.action === 'swap') return swapHome(me as string, member.org_id as string, body.draftId ?? '', body.homeId ?? '');
   let { data: s } = await db.from('nurture_settings').select('*').eq('org_id', member.org_id).eq('user_id', me).maybeSingle<Settings>();
   if (!s) {
     const { data: created } = await db.from('nurture_settings').insert({ org_id: member.org_id, user_id: me, enabled: true }).select('*').single<Settings>();
@@ -135,7 +138,7 @@ async function draftDue(s: Settings, limit: number, tz: string, quietEnd?: strin
     if (pendingFor.has(leadId)) continue;
     const { data: lead } = await db.from('leads').select('*').eq('id', leadId).maybeSingle<LeadRow & { pinned?: boolean }>();
     if (!lead) continue;
-    const fields = (lead.fields ?? {}) as LeadFields;
+    let fields = (lead.fields ?? {}) as LeadFields;
     const later = (days: number) => db.from('nurture_state').update({ next_at: new Date(Date.now() + days * 86_400_000).toISOString(), updated_at: nowIso }).eq('lead_id', leadId);
 
     if (DONE_STAGE.test(lead.stage)) {
@@ -153,19 +156,18 @@ async function draftDue(s: Settings, limit: number, tz: string, quietEnd?: strin
       continue;
     }
 
-    // Find something worth sending.
+    // The CRM often has area/budget blank while the agent's notes have it.
+    fields = await criteriaFromNotes(lead, fields, s);
+
+    // Find something worth sending: up to 5 coming-soon / new / price-drop homes.
     const sent = new Set((st.sent_home_ids as string[]) ?? []);
-    const listing = await findListing(lead, fields, sent, credsCache, s.website_url);
+    const options = await findListings(lead, fields, sent, credsCache);
+    const listing = options[0] ?? null;
     const community = await findCommunity(s.org_id, fields, sent);
     const touch = touchKind(fields, st.step as number, { home: !!listing, community: !!community });
     const home: HomeCard | null = touch === 'home' ? listing : touch === 'community' ? community : null;
 
-    const { data: history } = await db.from('timeline_items').select('at, kind, title, body').eq('lead_id', leadId).order('at', { ascending: false }).limit(6);
-    const prompt = nurturePrompt({
-      agentName, channel, step: st.step as number, touch, home, voice,
-      lead: { firstName: lead.first_name, source: lead.source ?? undefined, stage: lead.stage, createdAt: lead.crm_created_at, lastContactAt: lead.last_contact_at, fields },
-      history: (history ?? []).map((h) => `${String(h.at).slice(0, 10)} ${h.kind}: ${h.title}${h.body ? ` — ${String(h.body).slice(0, 140)}` : ''}`),
-    });
+    const prompt = await promptFor(lead, fields, { agentName, voice, channel, step: st.step as number, touch, home });
 
     let msg: { body: string; subject?: string; why: string };
     try {
@@ -180,6 +182,7 @@ async function draftDue(s: Settings, limit: number, tz: string, quietEnd?: strin
     await db.from('drafts').insert({
       org_id: s.org_id, lead_id: leadId, user_id: s.user_id, channel, play: 'nurture',
       subject: msg.subject ?? null, body: msg.body, why: msg.why, status: 'pending', home, send_after: sendAfter,
+      home_options: touch === 'home' && options.length > 1 ? options : null,
     });
     await db.from('nurture_state').update({
       step: (st.step as number) + 1,
@@ -192,35 +195,54 @@ async function draftDue(s: Settings, limit: number, tz: string, quietEnd?: strin
   return drafted;
 }
 
-/** A real MLS listing from the agent's own CRM that fits the lead. */
-async function findListing(lead: LeadRow, f: LeadFields, sent: Set<string>, cache: Map<string, unknown>, website: string | null): Promise<HomeCard | null> {
-  if (lead.crm !== 'lofty' || !lead.connection_id || !(f.areas?.length || f.budgetMax)) return null;
+/**
+ * Up to 5 homes from the agent's own MLS access that fit the lead, and are worth
+ * a text today: coming soon, just listed (7 days), or price just dropped.
+ * Mixed so the agent sees a bit of each; never a home this lead already got.
+ */
+async function findListings(lead: LeadRow, f: LeadFields, sent: Set<string>, cache: Map<string, unknown>): Promise<HomeCard[]> {
+  if (lead.crm !== 'lofty' || !lead.connection_id || !(f.areas?.length || f.budgetMax)) return [];
   if (!cache.has(lead.connection_id)) {
     const { data: conn } = await db.from('crm_connections').select('*').eq('id', lead.connection_id).maybeSingle<Connection>();
     cache.set(lead.connection_id, conn ? await credentialsFor(db, conn).catch(() => null) : null);
   }
   const creds = cache.get(lead.connection_id) as Awaited<ReturnType<typeof credentialsFor>> | null;
-  if (!creds) return null;
-  let rows: Record<string, unknown>[] | null = null;
-  try {
-    rows = await loftySearchListings(creds, { cities: f.areas, priceMin: f.budgetMin, priceMax: f.budgetMax, bedsMin: f.bedsMin });
-  } catch (e) {
-    console.error('listing search failed', String(e).slice(0, 200));
+  if (!creds) return [];
+  const q = { cities: f.areas, priceMin: f.budgetMin, priceMax: f.budgetMax, bedsMin: f.bedsMin };
+  const kinds = Object.keys(DEAL_SEARCHES) as DealKind[];
+  const lists = await Promise.all(
+    kinds.map((k) =>
+      loftySearchListings(creds, q, 8, DEAL_SEARCHES[k] as Record<string, unknown>)
+        .then((rows) => (rows ?? []).map((r) => toListingCard(r, k)).filter((c): c is HomeCard => !!c && !sent.has(c.id)))
+        .catch((e) => {
+          console.error('listing search failed', k, String(e).slice(0, 200));
+          return [] as HomeCard[];
+        }),
+    ),
+  );
+  // Round-robin: coming soon, new, price drop, coming soon, ...
+  const out: HomeCard[] = [];
+  const seen = new Set<string>();
+  for (let i = 0; out.length < HOME_OPTIONS && lists.some((l) => l.length > i); i++) {
+    for (const l of lists) {
+      const c = l[i];
+      if (c && !seen.has(c.id) && out.length < HOME_OPTIONS) {
+        seen.add(c.id);
+        out.push(c);
+      }
+    }
   }
-  if (!rows) return null; // no listings permission yet
-  for (const r of rows) {
-    const card = toListingCard(r, website);
-    if (card && !sent.has(card.id)) return card;
-  }
-  return null;
+  return out;
 }
 
 // Shape verified against a live Lofty /v2.0/listings/search response.
-function toListingCard(r: Record<string, unknown>, website: string | null): HomeCard | null {
+function toListingCard(r: Record<string, unknown>, badge?: DealKind): HomeCard | null {
   const pick = (...keys: string[]) => keys.map((k) => r[k]).find((v) => v !== undefined && v !== null && v !== '');
   const id = pick('mlsListingId', 'listingId', 'id', 'mlsNumber');
   const address = pick('streetAddress', 'address', 'fullAddress', 'displayAddress');
   if (id == null || !address) return null;
+  const status = String(r.listingStatus ?? '');
+  if (status && !/^(active|coming soon)$/i.test(status)) return null; // never pending / under contract
   const price = Number(pick('price', 'listPrice', 'listingPrice')) || undefined;
   const photos = pick('photos', 'pictures', 'photoUrls', 'pictureList') as unknown;
   const photo = (Array.isArray(photos) ? photos[0] : pick('previewPicture', 'photo', 'picture', 'mainPhoto', 'coverPhoto')) as string | undefined;
@@ -235,6 +257,9 @@ function toListingCard(r: Record<string, unknown>, website: string | null): Home
     baths: Number(pick('baths', 'bathrooms')) || undefined,
     url: typeof url === 'string' ? url : undefined,
     photo: typeof photo === 'string' ? photo : undefined,
+    badge: /coming soon/i.test(status) ? 'coming_soon' : badge,
+    sqft: Number(r.sqft) || undefined,
+    daysOnMarket: r.daysOnList != null ? Number(r.daysOnList) : undefined,
   };
 }
 
@@ -259,7 +284,13 @@ async function findCommunity(orgId: string, f: LeadFields, sent: Set<string>): P
   };
 }
 
-async function write(prompt: string, s: Settings): Promise<{ body: string; subject?: string; why: string }> {
+async function write(prompt: string, s: Pick<Settings, 'org_id' | 'user_id'>, model = MODEL, maxTokens = 400): Promise<{ body: string; subject?: string; why: string }> {
+  const parsed = await askModel(prompt, s, model, maxTokens);
+  if (!parsed.body) throw new Error('empty draft');
+  return { body: String(parsed.body).trim(), subject: parsed.subject ? String(parsed.subject) : undefined, why: String(parsed.why ?? 'Keeping in touch') };
+}
+
+async function askModel(prompt: string, s: Pick<Settings, 'org_id' | 'user_id'>, model: string, maxTokens: number): Promise<Record<string, unknown>> {
   const key = Deno.env.get('ANTHROPIC_API_KEY');
   if (!key) throw new Error('no_ai_key');
   const day = new Date().toISOString().slice(0, 10);
@@ -269,7 +300,7 @@ async function write(prompt: string, s: Settings): Promise<{ body: string; subje
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-    body: JSON.stringify({ model: MODEL, max_tokens: 400, messages: [{ role: 'user', content: prompt }] }),
+    body: JSON.stringify({ model, max_tokens: maxTokens, messages: [{ role: 'user', content: prompt }] }),
   });
   if (!res.ok) throw new Error(`model ${res.status} ${(await res.text()).slice(0, 200)}`);
   const out = await res.json();
@@ -283,9 +314,74 @@ async function write(prompt: string, s: Settings): Promise<{ body: string; subje
     { onConflict: 'user_id,day' },
   );
   const text = String(out.content?.[0]?.text ?? '');
-  const parsed = JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1));
-  if (!parsed.body) throw new Error('empty draft');
-  return { body: String(parsed.body).trim(), subject: parsed.subject ? String(parsed.subject) : undefined, why: String(parsed.why ?? 'Keeping in touch') };
+  return JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1));
+}
+
+/** The message prompt for a lead, with its recent history (CRM notes included). */
+async function promptFor(lead: LeadRow, fields: LeadFields, o: { agentName: string; voice?: string; channel: 'text' | 'email'; step: number; touch: ReturnType<typeof touchKind>; home: HomeCard | null }) {
+  const { data: history } = await db.from('timeline_items').select('at, kind, title, body').eq('lead_id', lead.id).order('at', { ascending: false }).limit(6);
+  return nurturePrompt({
+    ...o,
+    lead: { firstName: lead.first_name, source: lead.source ?? undefined, stage: lead.stage, createdAt: lead.crm_created_at, lastContactAt: lead.last_contact_at, fields },
+    history: (history ?? []).map((h) => `${String(h.at).slice(0, 10)} ${h.kind}: ${h.title}${h.body ? ` — ${String(h.body).slice(0, 240)}` : ''}`),
+  });
+}
+
+/**
+ * Fill area / budget / beds from the agent's notes when the CRM fields are blank.
+ * Runs once per new batch of notes; CRM values always win.
+ */
+async function criteriaFromNotes(lead: LeadRow, fields: LeadFields, s: Settings): Promise<LeadFields> {
+  if (fields.areas?.length && fields.budgetMax && fields.bedsMin) return fields;
+  const { data: notes } = await db.from('timeline_items').select('at, body').eq('lead_id', lead.id).eq('kind', 'note').order('at', { ascending: false }).limit(12);
+  const latest = notes?.[0]?.at as string | undefined;
+  if (!latest || (fields.notesReadAt && fields.notesReadAt >= latest)) return fields;
+  let found: ReturnType<typeof parseCriteria> = {};
+  try {
+    found = parseCriteria(await askModel(criteriaFromNotesPrompt(notes!.map((n) => String(n.body ?? ''))), s, FAST_MODEL, 200));
+  } catch (e) {
+    console.error('notes read failed', String(e).slice(0, 200));
+    return fields;
+  }
+  const next: LeadFields = {
+    ...fields,
+    areas: fields.areas?.length ? fields.areas : found.areas,
+    budgetMin: fields.budgetMin ?? (fields.budgetMax ? undefined : found.budgetMin),
+    budgetMax: fields.budgetMax ?? found.budgetMax,
+    bedsMin: fields.bedsMin ?? found.bedsMin,
+    notesReadAt: latest,
+  };
+  await db.from('leads').update({ fields: next }).eq('id', lead.id);
+  return next;
+}
+
+/** The agent picked a different home from the 5 options: rewrite the message around it. */
+async function swapHome(me: string, orgId: string, draftId: string, homeId: string) {
+  const { data: d } = await db.from('drafts').select('*').eq('id', draftId).eq('user_id', me).eq('status', 'pending').maybeSingle();
+  if (!d) return json({ error: 'That message was already sent or removed.' }, 404);
+  const options = (d.home_options ?? []) as HomeCard[];
+  const home = options.find((h) => h.id === homeId);
+  if (!home) return json({ error: 'That home is no longer available.' }, 400);
+  const { data: lead } = await db.from('leads').select('*').eq('id', d.lead_id).maybeSingle<LeadRow>();
+  if (!lead) return json({ error: 'Lead not found.' }, 404);
+  const { data: st } = await db.from('nurture_state').select('step, sent_home_ids').eq('lead_id', lead.id).maybeSingle();
+  const { data: member } = await db.from('members').select('display_name, voice_profile').eq('org_id', orgId).eq('user_id', me).maybeSingle();
+  const step = Math.max(0, Number(st?.step ?? 1) - 1); // the draft was written for the step before the bump
+  const prompt = await promptFor(lead, (lead.fields ?? {}) as LeadFields, {
+    agentName: (member?.display_name as string) || 'your agent',
+    voice: (member?.voice_profile as { summary?: string } | null)?.summary,
+    channel: d.channel, step, touch: 'home', home,
+  });
+  let msg: Awaited<ReturnType<typeof write>>;
+  try {
+    msg = await write(prompt, { org_id: orgId, user_id: me });
+  } catch (e) {
+    return json({ error: String(e).includes('daily_cap') ? 'Daily AI limit reached. Try tomorrow.' : 'Could not rewrite the message. Try again.' }, 500);
+  }
+  const sentIds = ((st?.sent_home_ids ?? []) as string[]).filter((x) => x !== (d.home as HomeCard | null)?.id);
+  await db.from('nurture_state').update({ sent_home_ids: [...sentIds, home.id], updated_at: new Date().toISOString() }).eq('lead_id', lead.id);
+  const { data: updated } = await db.from('drafts').update({ body: msg.body, subject: msg.subject ?? d.subject, why: msg.why, home }).eq('id', d.id).select('*').single();
+  return json({ ok: true, draft: updated });
 }
 
 /** Auto mode: send drafts whose time has come, through the CRM, logged like any message. */

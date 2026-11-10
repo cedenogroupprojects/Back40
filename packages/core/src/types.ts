@@ -84,6 +84,8 @@ export interface LeadFields {
   doNotEmail?: boolean;
   /** The CRM has recorded consent to text this lead. */
   textConsent?: boolean;
+  /** When Back 40 last read the agent's notes for area/budget/beds (notes newer than this get re-read). */
+  notesReadAt?: string;
 }
 
 export interface HotRules {
@@ -121,6 +123,8 @@ export interface Draft {
   status: 'pending' | 'sent' | 'skipped';
   /** The home or new-build community this message features (nurture). */
   home?: import('./nurture.ts').HomeCard | null;
+  /** Up to 5 homes the agent can swap in (coming soon / new / price drop). */
+  homeOptions?: import('./nurture.ts').HomeCard[] | null;
 }
 
 export interface Agent {

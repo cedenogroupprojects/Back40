@@ -217,8 +217,19 @@ export const lofty: CrmAdapter = {
 // The response shape isn't documented field-by-field, so this reads it defensively.
 export type ListingCriteria = { cities?: string[]; priceMin?: number; priceMax?: number; bedsMin?: number };
 
-export async function loftySearchListings(c: CrmCredentials, q: ListingCriteria, pageSize = 10): Promise<Record<string, unknown>[] | null> {
-  const filterConditions: Record<string, unknown> = {};
+/**
+ * The three "get it before everyone else" searches. Filters verified live
+ * (Nov 10): listingStatus ["Coming Soon"], daysOnSite "0,7", priceReduced true.
+ */
+export const DEAL_SEARCHES = {
+  coming_soon: { listingStatus: ['Coming Soon'] },
+  new: { listingStatus: ['Active'], daysOnSite: '0,7' },
+  price_drop: { listingStatus: ['Active'], priceReduced: true },
+} as const;
+export type DealKind = keyof typeof DEAL_SEARCHES;
+
+export async function loftySearchListings(c: CrmCredentials, q: ListingCriteria, pageSize = 10, extra: Record<string, unknown> = {}): Promise<Record<string, unknown>[] | null> {
+  const filterConditions: Record<string, unknown> = { ...extra };
   if (q.cities?.length) filterConditions.location = { city: q.cities };
   if (q.priceMax) filterConditions.price = `${q.priceMin ?? ''},${q.priceMax}`;
   if (q.bedsMin) filterConditions.beds = `${q.bedsMin},`;
@@ -230,6 +241,7 @@ export async function loftySearchListings(c: CrmCredentials, q: ListingCriteria,
   if (res.status === 401 || res.status === 403) return null; // no listings permission
   if (!res.ok) throw new Error(`lofty listings ${res.status}`);
   const body = await res.json();
+  if (Array.isArray(body?.listing)) return body.listing as Record<string, unknown>[];
   const found: Record<string, unknown>[] = [];
   const walk = (v: unknown) => {
     if (found.length) return;

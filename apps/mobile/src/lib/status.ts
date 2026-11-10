@@ -1,5 +1,5 @@
 // How a lead's status shows up: a small colored dot plus a few words.
-// Coral = hot, blue = you promised / follow-up, amber = back looking, gray = going cold.
+// Orange = hot, blue = you promised / follow-up, amber = back looking, gray = going cold.
 import type { Lead, LeadLabel } from '@back40/core';
 
 import type { Palette } from '@/theme/tokens';

@@ -1,8 +1,8 @@
 // Design tokens. Direction "A + C" (Nov 8): looks like a native iPhone app —
 // grouped lists, thin separators, status dots, standard tab bar — with the
 // density of a pro tool (filters, one-line context, time since activity).
-// Brand colors (Nov 10): navy, cream, pops of coral. Light = cream with navy
-// text; dark = navy with cream text. Coral is the accent in both.
+// Brand colors (Nov 10): navy, cream, pops of burnt orange. Light = cream with navy
+// text; dark = navy with cream text. Burnt orange is the accent in both.
 import { Platform } from 'react-native';
 
 export type Palette = {
@@ -40,10 +40,10 @@ export const light: Palette = {
   soft: '#EDE6D8',
   track: '#E6DECF',
   sep: '#DCD3C3',
-  accent: '#F0645A', // coral
+  accent: '#B5521F', // burnt orange
   onAccent: '#FFFFFF',
-  accentText: '#C9463A',
-  hotSoft: '#FCE3DD',
+  accentText: '#A2481A',
+  hotSoft: '#F6E3D6',
   good: '#2F8A5A',
   goodSoft: '#E2EFE5',
   cool: '#2E4A7D',
@@ -66,10 +66,10 @@ export const dark: Palette = {
   soft: '#1F2D4A',
   track: '#283958',
   sep: '#24324F',
-  accent: '#FF7668', // coral
+  accent: '#E07A43', // burnt orange
   onAccent: '#0F1A2E',
-  accentText: '#FF8C80',
-  hotSoft: '#3A2431',
+  accentText: '#EC9161',
+  hotSoft: '#3A2A22',
   good: '#6CC596',
   goodSoft: '#16302A',
   cool: '#93B2E8',
@@ -77,7 +77,7 @@ export const dark: Palette = {
   warm: '#E3B36A',
   nav: 'rgba(15,26,46,0.96)',
   navOnBg: 'transparent',
-  navOnIcon: '#FF7668',
+  navOnIcon: '#E07A43',
   navOff: '#6F7A93',
   dim: 'rgba(5,10,20,0.6)',
   shadow: false,

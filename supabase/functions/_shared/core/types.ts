@@ -84,6 +84,8 @@ export interface LeadFields {
   doNotEmail?: boolean;
   /** The CRM has recorded consent to text this lead. */
   textConsent?: boolean;
+  /** When Back 40 last read the agent's notes for area/budget/beds (notes newer than this get re-read). */
+  notesReadAt?: string;
 }
 
 export interface HotRules {

@@ -2,9 +2,9 @@
 // Nothing goes out without a tap (autopilot is opt-in per play).
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Image, Linking, Pressable, TextInput, View } from 'react-native';
+import { ActivityIndicator, Image, Linking, Pressable, TextInput, View } from 'react-native';
 
-import type { HomeCard } from '@back40/core';
+import { BADGE_TEXT, type HomeCard } from '@back40/core';
 
 import { Icon } from '@/components/Icon';
 import { Avatar, Card, IconButton, Pill, Row, Screen, T, NavBar, List, ListRow, SectionLabel } from '@/components/ui';
@@ -30,8 +30,8 @@ function Home({ h }: { h: HomeCard }) {
         </View>
       )}
       <View style={{ flex: 1, gap: 2 }}>
-        <T size={11} w="semibold" tone="sub">
-          {h.kind === 'community' ? 'NEW-BUILD COMMUNITY' : 'HOME THAT FITS'}
+        <T size={11} w="semibold" tone={h.badge ? 'accent' : 'sub'}>
+          {h.kind === 'community' ? 'NEW-BUILD COMMUNITY' : h.badge ? BADGE_TEXT[h.badge].toUpperCase() : 'HOME THAT FITS'}
         </T>
         <T w="semibold" size={15} numberOfLines={1}>
           {h.title}
@@ -52,9 +52,83 @@ function Home({ h }: { h: HomeCard }) {
   );
 }
 
+/** Pick one of up to 5 homes; the message rewrites itself around it. */
+function HomePicker({ options, current, onPick }: { options: HomeCard[]; current?: string; onPick: (id: string) => Promise<void> }) {
+  const { c } = useTheme();
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  if (options.length < 2) return null;
+  const pick = async (id: string) => {
+    if (id === current || busy) return;
+    setBusy(id);
+    setErr(null);
+    try {
+      await onPick(id);
+      setOpen(false);
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  };
+  return (
+    <View style={{ gap: 8 }}>
+      <Pressable accessibilityRole="button" onPress={() => setOpen((v) => !v)} style={{ alignSelf: 'flex-start', paddingVertical: 4 }}>
+        <T w="semibold" size={14} tone="accent">
+          {open ? 'Keep this home' : `Pick a different home (${options.length})`}
+        </T>
+      </Pressable>
+      {open ? (
+        <View style={{ gap: 8 }}>
+          {options.map((h) => {
+            const on = h.id === current;
+            const facts = [h.price ? money(h.price, false) : null, h.beds ? `${h.beds} bd` : null, h.baths ? `${h.baths} ba` : null, h.sqft ? `${h.sqft.toLocaleString('en-US')} sqft` : null].filter(Boolean).join(' · ');
+            return (
+              <Pressable key={h.id} accessibilityRole="button" accessibilityState={{ selected: on }} accessibilityLabel={`Use ${h.title}`} onPress={() => void pick(h.id)}>
+                <Row gap={12} style={{ borderRadius: 14, padding: 10, backgroundColor: on ? c.soft : c.card, borderWidth: 1.5, borderColor: on ? c.text : c.sep }}>
+                  {h.photo ? (
+                    <Image source={{ uri: h.photo }} style={{ width: 72, height: 72, borderRadius: 10, backgroundColor: c.track }} accessibilityIgnoresInvertColors />
+                  ) : (
+                    <View style={{ width: 72, height: 72, borderRadius: 10, backgroundColor: c.soft }} />
+                  )}
+                  <View style={{ flex: 1, gap: 2 }}>
+                    {h.badge ? (
+                      <T size={11} w="semibold" tone="accent">
+                        {BADGE_TEXT[h.badge].toUpperCase()}
+                        {h.badge === 'new' && h.daysOnMarket != null ? ` · ${h.daysOnMarket === 0 ? 'today' : `${h.daysOnMarket}d`}` : ''}
+                      </T>
+                    ) : null}
+                    <T w="semibold" size={15} numberOfLines={1}>
+                      {h.title}
+                    </T>
+                    <T size={13} tone="sub" numberOfLines={1}>
+                      {[h.city, facts].filter(Boolean).join(' · ')}
+                    </T>
+                  </View>
+                  {busy === h.id ? <ActivityIndicator color={c.sub} /> : on ? <Icon name="check" size={18} color={c.text} /> : null}
+                </Row>
+              </Pressable>
+            );
+          })}
+          {err ? (
+            <T size={13} tone="accent">
+              {err}
+            </T>
+          ) : (
+            <T size={12} tone="sub">
+              Tap a home and the message rewrites itself around it.
+            </T>
+          )}
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
 export default function Approve() {
   const { c } = useTheme();
-  const { drafts, lead: get, decideDraft } = useStore();
+  const { drafts, lead: get, decideDraft, swapHome } = useStore();
   const pending = drafts.filter((d) => d.status === 'pending');
   const total = drafts.length;
   const d = pending[0];
@@ -118,6 +192,7 @@ export default function Approve() {
               </View>
             )}
             {d.home ? <Home h={d.home} /> : null}
+            {d.homeOptions?.length ? <HomePicker key={d.id} options={d.homeOptions} current={d.home?.id} onPick={(id) => swapHome(d.id, id)} /> : null}
             <T size={13} tone="sub">
               <T w="semibold" size={13} tone="sub">
                 Why:{' '}

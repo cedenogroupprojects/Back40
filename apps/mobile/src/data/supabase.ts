@@ -142,8 +142,8 @@ export async function fetchTimeline(leadId: string): Promise<TimelineItem[]> {
 }
 
 export async function fetchDrafts(userId: string): Promise<Draft[]> {
-  const { data } = await supabase().from('drafts').select('id, lead_id, channel, play, subject, body, why, status, home').eq('user_id', userId).eq('status', 'pending').is('send_after', null).order('created_at', { ascending: true }).limit(60);
-  return (data ?? []).map((d) => ({ id: d.id, leadId: d.lead_id, channel: d.channel, play: d.play, subject: d.subject ?? undefined, body: d.body, why: d.why, status: d.status, home: d.home ?? null })) as Draft[];
+  const { data } = await supabase().from('drafts').select('id, lead_id, channel, play, subject, body, why, status, home, home_options').eq('user_id', userId).eq('status', 'pending').is('send_after', null).order('created_at', { ascending: true }).limit(60);
+  return (data ?? []).map((d) => ({ id: d.id, leadId: d.lead_id, channel: d.channel, play: d.play, subject: d.subject ?? undefined, body: d.body, why: d.why, status: d.status, home: d.home ?? null, homeOptions: d.home_options ?? null })) as Draft[];
 }
 
 export async function fetchCallsSince(userId: string, sinceIso: string) {
@@ -196,6 +196,12 @@ export async function saveNurture(orgId: string, userId: string, s: NurtureSetti
 
 /** Write today's messages now instead of waiting for the morning run. */
 export const runNurtureNow = (limit?: number) => fn<{ ok: boolean; drafted: number }>('nurture', { preview: true, limit });
+
+/** Rewrite a nurture message around a different home from its options. */
+export async function swapHome(draftId: string, homeId: string) {
+  const r = await fn<{ ok: boolean; draft: { body: string; subject: string | null; why: string; home: Draft['home'] } }>('nurture', { action: 'swap', draftId, homeId });
+  return r.draft;
+}
 
 export async function nurtureFor(leadId: string) {
   const { data } = await supabase().from('nurture_state').select('status, step, next_at, last_sent_at, stop_reason').eq('lead_id', leadId).maybeSingle();

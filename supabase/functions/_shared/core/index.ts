@@ -4,7 +4,7 @@ export * from './score.ts';
 export * from './pipeline.ts';
 export * from './nurture.ts';
 export * from './crm/adapter.ts';
-export { lofty, mapLoftyLead, loftySearchListings, type ListingCriteria } from './crm/lofty.ts';
+export { lofty, mapLoftyLead, loftySearchListings, DEAL_SEARCHES, type DealKind, type ListingCriteria } from './crm/lofty.ts';
 export { followUpBoss, mapFubPerson } from './crm/followupboss.ts';
 export { goHighLevel, mapGhlContact } from './crm/gohighlevel.ts';
 

@@ -72,7 +72,13 @@ export type HomeCard = {
   url?: string;
   photo?: string;
   highlights?: string;
+  /** Why this home is worth a text today. */
+  badge?: 'coming_soon' | 'new' | 'price_drop';
+  sqft?: number;
+  daysOnMarket?: number;
 };
+
+export const BADGE_TEXT: Record<NonNullable<HomeCard['badge']>, string> = { coming_soon: 'Coming soon', new: 'New listing', price_drop: 'Price drop' };
 
 export type DraftContext = {
   agentName: string;
@@ -118,12 +124,12 @@ export function nurturePrompt(c: DraftContext): string {
   ].filter(Boolean);
   const home = c.home
     ? c.home.kind === 'listing'
-      ? `HOME TO SHARE (real MLS listing): ${c.home.title}${c.home.city ? `, ${c.home.city}` : ''}${c.home.price ? ` — $${c.home.price.toLocaleString('en-US')}` : ''}${c.home.beds ? `, ${c.home.beds} bd` : ''}${c.home.baths ? `/${c.home.baths} ba` : ''}${c.home.url ? `. Link: ${c.home.url}` : ''}`
+      ? `HOME TO SHARE (real MLS listing): ${c.home.title}${c.home.city ? `, ${c.home.city}` : ''}${c.home.price ? ` — $${c.home.price.toLocaleString('en-US')}` : ''}${c.home.beds ? `, ${c.home.beds} bd` : ''}${c.home.baths ? `/${c.home.baths} ba` : ''}${c.home.badge ? `. ${{ coming_soon: 'COMING SOON: not on the open market yet', new: `NEW LISTING: on the market ${c.home.daysOnMarket ?? 'a few'} days`, price_drop: 'PRICE JUST DROPPED' }[c.home.badge]}` : ''}${c.home.url ? `. Link: ${c.home.url}` : ''}`
       : `NEW-BUILD COMMUNITY TO SHARE: ${c.home.title}${c.home.subtitle ? ` by ${c.home.subtitle}` : ''} in ${c.home.city}${c.home.priceFrom ? `, from $${c.home.priceFrom.toLocaleString('en-US')}` : ''}${c.home.highlights ? `. ${c.home.highlights}` : ''}${c.home.url ? `. Link: ${c.home.url}` : ''}`
     : null;
   const goal =
     c.touch === 'home'
-      ? 'Share the home below because it fits what they told us. Say why it fits in a few words. End with one easy yes/no question (e.g. want to see it this weekend?).'
+      ? 'Share the home below because it fits what they told us. Lead with why it is worth their attention right now (coming soon before most buyers see it / just listed / price just dropped), the way an insider would tip off a friend, then why it fits them in a few words. Make them feel they are getting early access, without hype or pressure. End with one easy yes/no question (e.g. want to see it before it gets busy?).'
       : c.touch === 'community'
         ? 'Share the new-build community below as something worth a look. Mention one concrete reason. End with one easy question.'
         : `We do not know enough yet to send homes. Ask ONE easy question about ${
@@ -171,4 +177,32 @@ export function nextQuestion(f: LeadFields, step: number): 'area' | 'price' | 't
 /** Next touch time after this one. */
 export function nextTouchAt(fields: LeadFields, now = Date.now()): string {
   return new Date(now + cadenceDays(fields) * DAY).toISOString();
+}
+
+/** Prompt that pulls search criteria out of an agent's notes on a lead. */
+export function criteriaFromNotesPrompt(notes: string[]): string {
+  return `These are a real estate agent's notes about a home buyer (newest first):
+${notes.map((n) => `- ${n.replace(/\s+/g, ' ').slice(0, 600)}`).join('\n')}
+
+Pull out what the buyer wants. Only include what the notes clearly say; leave anything unclear out.
+Return JSON only: {"areas": ["City", ...], "budgetMin": number, "budgetMax": number, "bedsMin": number}
+- areas: cities they want (not cities they ruled out), at most 4, proper case, no state.
+- budget in whole dollars ("500-600k" -> 500000 and 600000; "under 700" -> budgetMax 700000).
+- If nothing usable, return {}.`;
+}
+
+/** Keep only sane values from the model's answer. */
+export function parseCriteria(raw: unknown): Pick<LeadFields, 'areas' | 'budgetMin' | 'budgetMax' | 'bedsMin'> {
+  const o = (raw ?? {}) as Record<string, unknown>;
+  const out: Pick<LeadFields, 'areas' | 'budgetMin' | 'budgetMax' | 'bedsMin'> = {};
+  if (Array.isArray(o.areas)) {
+    const a = o.areas.filter((x): x is string => typeof x === 'string' && x.trim().length > 1 && x.length < 40).map((x) => x.trim()).slice(0, 4);
+    if (a.length) out.areas = a;
+  }
+  const money = (v: unknown) => (typeof v === 'number' && v >= 50_000 && v <= 20_000_000 ? Math.round(v) : undefined);
+  const min = money(o.budgetMin), max = money(o.budgetMax);
+  if (max) out.budgetMax = max;
+  if (min && (!max || min <= max)) out.budgetMin = min;
+  if (typeof o.bedsMin === 'number' && o.bedsMin >= 1 && o.bedsMin <= 8) out.bedsMin = Math.round(o.bedsMin);
+  return out;
 }
