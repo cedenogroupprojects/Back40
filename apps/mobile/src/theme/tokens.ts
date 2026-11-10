@@ -1,7 +1,8 @@
 // Design tokens. Direction "A + C" (Nov 8): looks like a native iPhone app —
 // grouped lists, thin separators, status dots, standard tab bar — with the
 // density of a pro tool (filters, one-line context, time since activity).
-// Light = iOS grouped grays; dark = near-black with the toned-down Ember coral.
+// Brand colors (Nov 10): navy, cream, pops of coral. Light = cream with navy
+// text; dark = navy with cream text. Coral is the accent in both.
 import { Platform } from 'react-native';
 
 export type Palette = {
@@ -31,54 +32,54 @@ export type Palette = {
 };
 
 export const light: Palette = {
-  bg: '#F2F2F7',
-  card: '#FFFFFF',
-  text: '#111113',
-  sub: '#8A8A8E',
-  body: '#3C3C43',
-  soft: '#E9E9EE',
-  track: '#E3E3E8',
-  sep: '#D1D1D6',
-  accent: '#E5533D',
+  bg: '#F6F1E7', // cream
+  card: '#FFFCF7',
+  text: '#14213D', // navy
+  sub: '#7A8194',
+  body: '#34405A',
+  soft: '#EDE6D8',
+  track: '#E6DECF',
+  sep: '#DCD3C3',
+  accent: '#F0645A', // coral
   onAccent: '#FFFFFF',
-  accentText: '#D9472F',
-  hotSoft: '#FDECE8',
-  good: '#2E9E5B',
-  goodSoft: '#E6F4EC',
-  cool: '#3478F6',
-  coolSoft: '#E8F0FE',
-  warm: '#E8A33D',
-  nav: 'rgba(249,249,249,0.96)',
+  accentText: '#C9463A',
+  hotSoft: '#FCE3DD',
+  good: '#2F8A5A',
+  goodSoft: '#E2EFE5',
+  cool: '#2E4A7D',
+  coolSoft: '#E2E7F1',
+  warm: '#C98A2E',
+  nav: 'rgba(250,246,238,0.96)',
   navOnBg: 'transparent',
-  navOnIcon: '#E5533D',
-  navOff: '#8A8A8E',
-  dim: 'rgba(0,0,0,0.35)',
+  navOnIcon: '#14213D',
+  navOff: '#9097A6',
+  dim: 'rgba(20,33,61,0.4)',
   shadow: false,
 };
 
 export const dark: Palette = {
-  bg: '#0E0F11',
-  card: '#17181B',
-  text: '#EDEDEF',
-  sub: '#8A8F97',
-  body: '#B4B8BE',
-  soft: '#1F2125',
-  track: '#2A2D33',
-  sep: '#25272C',
-  accent: '#E8734F',
-  onAccent: '#0E0F11',
-  accentText: '#EC8763',
-  hotSoft: '#2A1A14',
-  good: '#5BC08A',
-  goodSoft: '#14241B',
-  cool: '#7AA2F7',
-  coolSoft: '#172033',
-  warm: '#D9A55B',
-  nav: 'rgba(14,15,17,0.96)',
+  bg: '#0F1A2E', // navy
+  card: '#172440',
+  text: '#F6F1E7', // cream
+  sub: '#8E98AD',
+  body: '#C7CDD8',
+  soft: '#1F2D4A',
+  track: '#283958',
+  sep: '#24324F',
+  accent: '#FF7668', // coral
+  onAccent: '#0F1A2E',
+  accentText: '#FF8C80',
+  hotSoft: '#3A2431',
+  good: '#6CC596',
+  goodSoft: '#16302A',
+  cool: '#93B2E8',
+  coolSoft: '#1C2B49',
+  warm: '#E3B36A',
+  nav: 'rgba(15,26,46,0.96)',
   navOnBg: 'transparent',
-  navOnIcon: '#EDEDEF',
-  navOff: '#6B7079',
-  dim: 'rgba(0,0,0,0.6)',
+  navOnIcon: '#FF7668',
+  navOff: '#6F7A93',
+  dim: 'rgba(5,10,20,0.6)',
   shadow: false,
 };
 

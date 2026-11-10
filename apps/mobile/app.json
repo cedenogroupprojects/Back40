@@ -17,7 +17,7 @@
     "android": {
       "package": "com.back40app.app",
       "adaptiveIcon": {
-        "backgroundColor": "#111111",
+        "backgroundColor": "#0F1A2E",
         "foregroundImage": "./assets/brand/adaptive-foreground.png",
         "backgroundImage": "./assets/brand/adaptive-background.png",
         "monochromeImage": "./assets/brand/adaptive-monochrome.png"
@@ -28,7 +28,7 @@
       "output": "single",
       "favicon": "./assets/brand/favicon.png",
       "name": "Back 40",
-      "themeColor": "#111111"
+      "themeColor": "#0F1A2E"
     },
     "plugins": [
       [
@@ -41,7 +41,7 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#0F1113",
+          "backgroundColor": "#0F1A2E",
           "image": "./assets/brand/splash-mark.png",
           "imageWidth": 120
         }

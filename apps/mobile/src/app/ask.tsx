@@ -47,8 +47,8 @@ export default function Ask() {
         ) : null}
         {msgs.map((m, i) =>
           m.from === 'me' ? (
-            <View key={i} style={{ alignSelf: 'flex-end', maxWidth: '82%', backgroundColor: c.cool, borderRadius: 18, borderBottomRightRadius: 5, paddingHorizontal: 13, paddingVertical: 9 }}>
-              <T size={16} style={{ color: '#FFFFFF' }}>
+            <View key={i} style={{ alignSelf: 'flex-end', maxWidth: '82%', backgroundColor: c.text, borderRadius: 18, borderBottomRightRadius: 5, paddingHorizontal: 13, paddingVertical: 9 }}>
+              <T size={16} style={{ color: c.bg }}>
                 {m.text}
               </T>
             </View>
