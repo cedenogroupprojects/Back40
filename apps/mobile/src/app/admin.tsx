@@ -8,7 +8,7 @@ import { Redirect, router } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
 
-import { bucketFor, groupByBucket, PIPELINE, type BucketId } from '@back40/core';
+import { bucketFor, groupByBucket, type BucketId } from '@back40/core';
 
 import { Avatar, Card, Chip, IconButton, List, Row, Screen, T, NavBar, Dot, ListRow, SectionLabel } from '@/components/ui';
 import { Icon } from '@/components/Icon';
@@ -17,15 +17,17 @@ import { money, useStore } from '@/data/store';
 import * as live from '@/data/supabase';
 import { useTheme } from '@/theme/ThemeProvider';
 
-const SHORT: Record<BucketId, string> = { new: 'New', contacted: 'Contacted', lender: 'Lender', preapproved: 'Pre-appr.', looking: 'Looking', offers: 'Offers', escrow: 'Escrow' };
+// Short column labels so any CRM's stage names fit the team grid.
+const SHORT_WORDS: Record<string, string> = { 'New Lead': 'New', 'New Leads': 'New', 'Sent to Lender': 'Lender', 'Pre-Approved': 'Pre-appr.', 'Actively Looking': 'Looking', 'Submitting Offers': 'Offers', 'In Escrow': 'Escrow', 'Attempted Contact': 'Attempted', 'Appointment Set': 'Appt set', 'Appointment Met': 'Appt met', 'Call Scheduled': 'Call set' };
+const short = (label: string) => SHORT_WORDS[label] ?? (label.length > 10 ? `${label.slice(0, 9).trim()}.` : label);
 
 export default function Admin() {
   const { c } = useTheme();
-  const { team, settings, leads, isLiveMode, profile } = useStore();
+  const { team, settings, leads, isLiveMode, profile, pipeline: PIPELINE } = useStore();
   const [moving, setMoving] = useState<string | null>(null);
   const [moved, setMoved] = useState<Record<string, string>>({});
   const [expanded, setExpanded] = useState<string | null>(null);
-  const mine = useMemo(() => groupByBucket(leads), [leads]);
+  const mine = useMemo(() => groupByBucket(leads, PIPELINE), [leads, PIPELINE]);
   const [liveTeam, setLiveTeam] = useState<live.TeamRow[] | null>(null);
   const [liveStale, setLiveStale] = useState<{ leadId: string; name: string; days: number; bucket: BucketId; agentId: string | null }[]>([]);
 
@@ -38,12 +40,12 @@ export default function Admin() {
           leadId: r.id as string,
           name: `${r.first_name} ${r.last_name}`.trim(),
           days: r.last_contact_at ? Math.max(2, Math.round((Date.now() - Date.parse(r.last_contact_at as string)) / 86_400_000)) : 0,
-          bucket: bucketFor({ stage: r.stage as string }) ?? 'new',
+          bucket: bucketFor({ stage: r.stage as string }, PIPELINE) ?? PIPELINE[0]?.id ?? 'new',
           agentId: r.assigned_user_id as string | null,
         })),
       ),
     );
-  }, [isLiveMode, profile]);
+  }, [isLiveMode, profile, PIPELINE]);
 
   if (!(settings.role === 'owner' || settings.role === 'admin')) return <Redirect href="/" />;
 
@@ -57,10 +59,10 @@ export default function Admin() {
       }))
     : team.map((a) => {
     const p = SAMPLE_TEAM_PIPELINE[a.id] ?? { buckets: { new: 0, contacted: 0, lender: 0, preapproved: 0, looking: 0, offers: 0, escrow: 0 }, commission: 0, stale: [] };
-    const buckets = a.id === 'me' ? (Object.fromEntries(PIPELINE.map((b) => [b.id, mine[b.id].length])) as Record<BucketId, number>) : p.buckets;
+    const buckets = a.id === 'me' ? (Object.fromEntries(PIPELINE.map((b) => [b.id, (mine[b.id] ?? []).length])) as Record<BucketId, number>) : p.buckets;
     return { a, buckets, commission: p.commission, stale: p.stale as { name: string; days: number; bucket: BucketId; leadId?: string }[] };
   });
-  const totals = Object.fromEntries(PIPELINE.map((b) => [b.id, rows.reduce((t, r) => t + r.buckets[b.id], 0)])) as Record<BucketId, number>;
+  const totals = Object.fromEntries(PIPELINE.map((b) => [b.id, rows.reduce((t, r) => t + (r.buckets[b.id] ?? 0), 0)])) as Record<BucketId, number>;
   const maxTotal = Math.max(1, ...Object.values(totals));
   const stale = rows.flatMap((r) => r.stale.map((s) => ({ ...s, agent: r.a }))).filter((s) => !moved[s.name]);
   const teamMoney = rows.reduce((t, r) => t + r.commission, 0);
@@ -90,7 +92,7 @@ export default function Admin() {
                   {s.name}
                 </T>
                 <T size={13} tone="sub">
-                  {s.agent.name} · {SHORT[s.bucket]} · {s.days} days, no contact
+                  {s.agent.name} · {short(PIPELINE.find((b) => b.id === s.bucket)?.label ?? s.bucket)} · {s.days} days, no contact
                 </T>
               </View>
               <Pressable accessibilityRole="button" onPress={() => setMoving(moving === s.name ? null : s.name)} hitSlop={8}>
@@ -123,7 +125,7 @@ export default function Admin() {
         {PIPELINE.map((b) => (
           <Row key={b.id} gap={10}>
             <T size={13} w="semibold" style={{ width: 80 }}>
-              {SHORT[b.id]}
+              {short(b.label)}
             </T>
             <View style={{ flex: 1, height: 10, borderRadius: 5, backgroundColor: c.soft, overflow: 'hidden' }}>
               <View style={{ width: `${(totals[b.id] / maxTotal) * 100}%`, height: 10, borderRadius: 5, backgroundColor: b.id === 'escrow' ? c.good : c.accent }} />
@@ -139,7 +141,7 @@ export default function Admin() {
       <SectionLabel>By agent</SectionLabel>
       <List>
         {rows.map(({ a, buckets, commission, stale: st }) => {
-          const total = PIPELINE.reduce((t, b) => t + buckets[b.id], 0);
+          const total = PIPELINE.reduce((t, b) => t + (buckets[b.id] ?? 0), 0);
           const open = expanded === a.id;
           return (
             <View key={a.id}>
@@ -170,7 +172,7 @@ export default function Admin() {
                         {b.label}
                       </T>
                       <T w="semibold" size={14} style={{ color: buckets[b.id] ? c.text : c.sub }}>
-                        {buckets[b.id]}
+                        {buckets[b.id] ?? 0}
                       </T>
                     </Row>
                   ))}

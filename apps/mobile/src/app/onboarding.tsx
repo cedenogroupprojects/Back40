@@ -8,7 +8,6 @@ import type { CrmKind } from '@back40/core';
 
 import { ParcelMark } from '@/components/Icon';
 import { Card, Chip, List, ListRow, Pill, Row, Screen, T } from '@/components/ui';
-import { STAGES } from '@/data/sample';
 import { useStore } from '@/data/store';
 import { CRM_NAME } from '@/lib/crm';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -17,7 +16,7 @@ const COUNTS: Record<string, number> = { 'New Lead': 12, Contacted: 38, 'Sent to
 
 export default function Onboarding() {
   const { c } = useTheme();
-  const { settings, finishOnboarding } = useStore();
+  const { settings, stages: stageList, isLiveMode, finishOnboarding } = useStore();
   const [step, setStep] = useState(0);
   const [crm, setCrm] = useState<CrmKind | null>(settings.crm);
   const [stages, setStages] = useState<string[]>(['New Lead', 'Pre-Approved', 'Actively Looking', 'Submitting Offers']);
@@ -63,8 +62,8 @@ export default function Onboarding() {
           </T>
           <T tone="body">We found these stages in {crm ? CRM_NAME[crm] : 'your CRM'}. Leads in checked stages can show up on Today.</T>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-            {STAGES.map((s) => (
-              <Chip key={s} label={`${s} · ${COUNTS[s] ?? 0}`} on={stages.includes(s)} onPress={() => setStages((x) => (x.includes(s) ? x.filter((y) => y !== s) : [...x, s]))} />
+            {stageList.map((s) => (
+              <Chip key={s} label={isLiveMode || COUNTS[s] == null ? s : `${s} · ${COUNTS[s]}`} on={stages.includes(s)} onPress={() => setStages((x) => (x.includes(s) ? x.filter((y) => y !== s) : [...x, s]))} />
             ))}
           </View>
           <T size={13} tone="sub">

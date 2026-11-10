@@ -8,8 +8,6 @@ import { useRef, useState, type ComponentRef, type ReactNode, type Ref } from 'r
 import { KeyboardAvoidingView, LayoutAnimation, Platform, Pressable, ScrollView, TextInput, View, type TextInputProps } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { PIPELINE } from '@back40/core';
-
 import { Icon } from '@/components/Icon';
 import { HAIRLINE, Row, T } from '@/components/ui';
 import { money, useStore } from '@/data/store';
@@ -37,7 +35,7 @@ export default function NewLead() {
   const params = useLocalSearchParams<{ stage?: string }>();
   const { c } = useTheme();
   const insets = useSafeAreaInsets();
-  const { addLead, setCommission } = useStore();
+  const { addLead, setCommission, pipeline: PIPELINE } = useStore();
 
   const [first, setFirst] = useState('');
   const [last, setLast] = useState('');

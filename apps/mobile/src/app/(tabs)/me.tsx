@@ -5,7 +5,6 @@ import { Pressable, Switch, View } from 'react-native';
 
 import { Icon } from '@/components/Icon';
 import { Avatar, Card, Chip, List, ListRow, Pill, Row, Screen, SectionLabel, Segmented, T } from '@/components/ui';
-import { STAGES } from '@/data/sample';
 import { relTime, useStore, type Settings } from '@/data/store';
 import * as live from '@/data/supabase';
 import { CRM_NAME } from '@/lib/crm';
@@ -58,7 +57,7 @@ function Stepper({ value, onChange, disabled }: { value: number; onChange: (v: n
 
 export default function Me() {
   const { c, mode, setMode } = useTheme();
-  const { settings, updateSettings, isLiveMode, profile, signOut } = useStore();
+  const { settings, stages, updateSettings, isLiveMode, profile, signOut } = useStore();
   const canSetGoal = settings.role === 'owner' || settings.role === 'admin' || settings.role === 'solo';
   const setNudge = (k: keyof Settings['nudges'], v: boolean) => updateSettings({ nudges: { ...settings.nudges, [k]: v } });
   const toggleStage = (s: string) => {
@@ -71,7 +70,7 @@ export default function Me() {
       <List>
         <ListRow
           left={<Avatar initials={settings.initials} size={44} />}
-          label={profile?.name ?? `${settings.name} Giordano`}
+          label={profile?.name ?? (settings.name || 'You')}
           sub={`${settings.role === 'owner' || settings.role === 'admin' ? 'Team leader' : settings.role === 'solo' ? 'Solo agent' : 'Agent'}${profile?.teamName ? ` · ${profile.teamName}` : ' · Pro plan'}`}
         />
       </List>
@@ -121,7 +120,7 @@ export default function Me() {
 
       <Section plain title="What counts as hot" note={`Hot leads untouched for ${settings.rules.goingColdDays} days are flagged "Slipping away" for everyone. Today shows about ${settings.rules.cap} leads.`}>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-          {STAGES.map((s) => (
+          {stages.map((s) => (
             <Chip key={s} label={s} on={settings.rules.hotStages.includes(s)} onPress={() => toggleStage(s)} />
           ))}
         </View>

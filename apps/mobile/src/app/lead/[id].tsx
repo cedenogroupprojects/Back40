@@ -11,7 +11,6 @@ import { labelFor } from '@back40/core';
 import { Icon, type IconName } from '@/components/Icon';
 import { Avatar, Card, Chip, Dot, IconButton, List, ListRow, Row, Screen, SectionLabel, T } from '@/components/ui';
 import { STATUS_TEXT, statusColor } from '@/lib/status';
-import { STAGES } from '@/data/sample';
 import { initials, money, relTime, useStore } from '@/data/store';
 import { callLead, textLead } from '@/lib/actions';
 import { SOURCE_NAME } from '@/lib/crm';
@@ -21,7 +20,7 @@ import { font } from '@/theme/tokens';
 export default function LeadDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { c } = useTheme();
-  const { lead: get, settings, labelText, updateLead, addNote, togglePin, loadTimeline } = useStore();
+  const { lead: get, stages, settings, labelText, updateLead, addNote, togglePin, loadTimeline } = useStore();
   const lead = get(id);
   const [moreSummary, setMoreSummary] = useState(false);
   const [shown, setShown] = useState(20);
@@ -120,7 +119,7 @@ export default function LeadDetail() {
         <ListRow label="Stage" value={lead.stage} onPress={() => setEditingStage((v) => !v)} />
         {editingStage ? (
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, padding: 12 }}>
-            {STAGES.map((s) => (
+            {stages.map((s) => (
               <Chip key={s} label={s} on={lead.stage === s} onPress={() => { updateLead(lead.id, { stage: s }); setEditingStage(false); }} />
             ))}
           </View>

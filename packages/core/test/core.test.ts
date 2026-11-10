@@ -172,3 +172,18 @@ test('nurture: greets by name only when it looks like a name', async () => {
   assert.equal(n.greetableName('jdog_23'), null);
   assert.equal(n.greetableName(''), null);
 });
+
+test('pipeline mirrors the CRM: real Lofty stage names, sensible order, done/dead left off', async () => {
+  const p = await import('../src/pipeline.ts');
+  const board = p.buildPipeline([
+    { stage: 'Contacted', n: 252 }, { stage: 'Attempted Contact', n: 59 }, { stage: 'Closed', n: 52 }, { stage: 'New Leads', n: 34 },
+    { stage: 'Agent', n: 23 }, { stage: 'Appointment Set', n: 16 }, { stage: 'Call Scheduled', n: 11 }, { stage: 'Already Bought', n: 11 },
+    { stage: 'Bad Leads', n: 10 }, { stage: 'Appointment Met', n: 10 }, { stage: 'Sent to Lender', n: 6 }, { stage: 'Do Not Contact', n: 6 },
+  ]).map((b) => b.label);
+  assert.deepEqual(board, ['New Leads', 'Attempted Contact', 'Contacted', 'Appointment Set', 'Call Scheduled', 'Appointment Met', 'Sent to Lender']);
+  assert.deepEqual(p.defaultHotStages(board), ['New Leads', 'Appointment Set', 'Call Scheduled', 'Appointment Met', 'Sent to Lender']);
+  assert.equal(p.classifyStage('Under Contract').phase, 7);
+  assert.equal(p.classifyStage('Bad Leads').kind, 'dead');
+  assert.equal(p.classifyStage('Lender').kind, 'done');
+  assert.equal(p.classifyStage('Sent to Lender').kind, 'active');
+});

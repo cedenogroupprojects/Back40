@@ -2,6 +2,7 @@
 // call list. Pure functions so every agent gets the same behavior and it's
 // testable. The planner (supabase/functions/nurture) does the I/O.
 import type { Lead, LeadFields } from './types.ts';
+import { classifyStage } from './pipeline.ts';
 
 const DAY = 86_400_000;
 
@@ -150,7 +151,8 @@ Return JSON only: {"body": "...", ${c.channel === 'email' ? '"subject": "short, 
 }
 
 /** Stages that mean the deal is done or dead: never nurture these. */
-export const DONE_STAGE = /^(closed|already bought|sold|agent|lender|vendor|trash|archived?|not interested|do not contact|dnc|spam|junk)$/i;
+/** Closed, dead or non-lead stages (same rules the Pipeline uses to hide them). */
+export const DONE_STAGE = { test: (stage: string | null | undefined) => !!stage && classifyStage(stage).kind !== 'active' };
 
 /**
  * The one thing we most need to learn next, so discovery messages don't all ask

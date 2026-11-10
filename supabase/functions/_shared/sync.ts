@@ -5,7 +5,8 @@ import type { Connection, serviceClient } from './db.ts';
 
 type Db = ReturnType<typeof serviceClient>;
 
-export const DONE_STAGE = /^(closed|already bought|sold|agent|lender|vendor|trash|archived?|not interested|do not contact|dnc|spam|junk)$/i;
+export { DONE_STAGE } from './core/nurture.ts';
+import { DONE_STAGE } from './core/nurture.ts';
 
 export async function upsertLead(db: Db, conn: Connection, l: CrmLeadInput, isNew = false, onlyTeam = true) {
   // CRM assignee → Back 40 user. Only leads assigned to you in the CRM land on

@@ -10,6 +10,11 @@ import {
   dailyScore,
   pointsFor,
   rankToday,
+  buildPipeline,
+  defaultHotStages,
+  PIPELINE,
+  stageOptions,
+  type Bucket,
   staleHotLeads,
   type CallOutcome,
   type CrmKind,
@@ -59,6 +64,10 @@ type Store = {
   onboarded: boolean;
   leads: Lead[];
   today: RankedLead[];
+  /** The team's own CRM stages as board columns (sample columns in demo). */
+  pipeline: Bucket[];
+  /** Every stage the team uses, for stage pickers (board first, then done/dead). */
+  stages: string[];
   drafts: Draft[];
   nudges: Nudge[];
   team: typeof SAMPLE_TEAM;
@@ -88,8 +97,8 @@ export type NewLead = { firstName: string; lastName?: string; phone?: string; em
 const Ctx = createContext<Store | null>(null);
 
 const DEFAULT_SETTINGS: Settings = {
-  name: 'Jeffry',
-  initials: 'JG',
+  name: '',
+  initials: '',
   role: 'owner',
   dailyGoal: 6,
   crm: 'lofty',
@@ -104,11 +113,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<Status>(live.isLive ? 'loading' : 'demo');
   const [profile, setProfile] = useState<live.Profile | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
+  const [settings, setSettings] = useState<Settings>(live.isLive ? DEFAULT_SETTINGS : { ...DEFAULT_SETTINGS, name: 'Taylor', initials: 'TM' });
   const [onboarded, setOnboarded] = useState(true);
   const [leads, setLeads] = useState<Lead[]>(live.isLive ? [] : SAMPLE_LEADS);
   const [drafts, setDrafts] = useState<Draft[]>(live.isLive ? [] : SAMPLE_DRAFTS);
   const [team, setTeam] = useState(SAMPLE_TEAM);
+  const [teamStages, setTeamStages] = useState<{ stage: string; n: number }[]>([]);
   const [calls, setCalls] = useState<{ outcome: CallOutcome; speedToLead?: boolean }[]>(live.isLive ? [] : [{ outcome: 'talked' }]);
   const [weekLive, setWeekLive] = useState<number[] | null>(null);
   const isLiveMode = status !== 'demo';
@@ -152,8 +162,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const monday = new Date();
       monday.setHours(0, 0, 0, 0);
       monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
-      const [ls, ds, cs] = await Promise.all([live.fetchLeads(p.userId), live.fetchDrafts(p.userId), live.fetchCallsSince(p.userId, monday.toISOString())]);
+      const [ls, ds, cs, ts] = await Promise.all([live.fetchLeads(p.userId), live.fetchDrafts(p.userId), live.fetchCallsSince(p.userId, monday.toISOString()), live.fetchTeamStages()]);
       setLeads(ls);
+      setTeamStages(ts);
+      // Hot stages follow the team's real CRM stages. If none of the saved ones exist
+      // (new team, or names that don't match this CRM), pick sensible ones automatically.
+      const names = ts.map((t) => t.stage);
+      const saved = p.hotStages.filter((h) => names.some((n) => n.toLowerCase() === h.toLowerCase()));
+      if (names.length && !saved.length) {
+        const auto = defaultHotStages(names);
+        setSettings((s) => ({ ...s, rules: { ...s.rules, hotStages: auto } }));
+        if (p.role !== 'agent') void live.updateTeamSettings(p.orgId, { hot_stages: auto }).catch(() => undefined);
+      }
       setDrafts(ds);
       const days = [0, 0, 0, 0, 0, 0, 0];
       for (const c of cs) days[(new Date(c.created_at).getDay() + 6) % 7]! += 1;
@@ -195,6 +215,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const enterDemo = () => {
     setLeads(SAMPLE_LEADS);
     setDrafts(SAMPLE_DRAFTS);
+    setSettings((s) => ({ ...s, name: 'Taylor', initials: 'TM' })); // sample agent, never a real person
     setCalls([{ outcome: 'talked' }]);
     setWeekLive(null);
     setStatus('demo');
@@ -215,6 +236,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const now = Date.now();
   const today = useMemo(() => rankToday(leads, settings.rules, now), [leads, settings.rules, now]);
+  // Board columns: the team's CRM stages plus any stage this agent's leads are in.
+  const pipeline = useMemo(() => {
+    if (!isLiveMode) return PIPELINE;
+    const counts = new Map<string, number>();
+    for (const t of teamStages) counts.set(t.stage, t.n);
+    for (const l of leads) if (!counts.has(l.stage)) counts.set(l.stage, 1);
+    const built = buildPipeline([...counts].map(([stage, n]) => ({ stage, n })));
+    return built.length ? built : PIPELINE;
+  }, [isLiveMode, teamStages, leads]);
+  const stages = useMemo(() => (isLiveMode && (teamStages.length || leads.length) ? stageOptions([...teamStages.map((t) => t.stage), ...leads.map((l) => l.stage)]) : PIPELINE.map((b) => b.stage)), [isLiveMode, teamStages, leads]);
   const stale = useMemo(() => staleHotLeads(leads, settings.rules, now), [leads, settings.rules, now]);
   const score = dailyScore({ date: '', calls, staleHotLeads: 0 }, settings.dailyGoal);
 
@@ -363,7 +394,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const value: Store = {
     status, isLiveMode, profile, notice, clearNotice: () => setNotice(null), enterDemo, reload, loadTimeline, signOut,
-    settings, onboarded, leads, today, drafts, nudges, team, stale, lead,
+    settings, onboarded, leads, today, pipeline, stages, drafts, nudges, team, stale, lead,
     week,
     callsToday: calls.length,
     score,

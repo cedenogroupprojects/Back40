@@ -11,7 +11,7 @@ import { useMemo, useRef, useState } from 'react';
 import { Modal, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { groupByBucket, PIPELINE, type Bucket, type BucketId, type Lead } from '@back40/core';
+import { groupByBucket, type Bucket, type BucketId, type Lead } from '@back40/core';
 
 import { Icon } from '@/components/Icon';
 import { Card, Chip, IconButton, List, ListRow, Row, Screen, T } from '@/components/ui';
@@ -23,15 +23,17 @@ import { useTheme } from '@/theme/ThemeProvider';
 export default function Pipeline() {
   const { c } = useTheme();
   const insets = useSafeAreaInsets();
-  const { leads, updateLead } = useStore();
-  const groups = useMemo(() => groupByBucket(leads), [leads]);
-  const [stage, setStage] = useState<BucketId>('new');
+  const { leads, updateLead, pipeline: PIPELINE } = useStore();
+  const groups = useMemo(() => groupByBucket(leads, PIPELINE), [leads, PIPELINE]);
+  const [picked, setStage] = useState<BucketId | null>(null);
+  // Start on the first column that has someone in it.
+  const stage = picked && PIPELINE.some((b) => b.id === picked) ? picked : (PIPELINE.find((b) => groups[b.id]?.length)?.id ?? PIPELINE[0]!.id);
   const [sheet, setSheet] = useState<Lead | null>(null);
   const [toast, setToast] = useState<{ text: string; undo: () => void } | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const total = PIPELINE.reduce((t, b) => t + groups[b.id].reduce((s, l) => s + (l.fields.potentialCommission ?? 0), 0), 0);
-  const list = groups[stage];
+  const total = PIPELINE.reduce((t, b) => t + (groups[b.id] ?? []).reduce((s, l) => s + (l.fields.potentialCommission ?? 0), 0), 0);
+  const list = groups[stage] ?? [];
   const stageMoney = list.reduce((t, l) => t + (l.fields.potentialCommission ?? 0), 0);
   const idx = PIPELINE.findIndex((b) => b.id === stage);
   const next = PIPELINE[idx + 1];
@@ -51,7 +53,7 @@ export default function Pipeline() {
     <View style={{ flex: 1, backgroundColor: c.bg }}>
       <Screen
         title="Pipeline"
-        kicker={`${PIPELINE.reduce((n, b) => n + groups[b.id].length, 0)} buyers`}
+        kicker={`${PIPELINE.reduce((n, b) => n + (groups[b.id] ?? []).length, 0)} buyers`}
         right={<IconButton icon="plus" label="Add a lead" tone="soft" onPress={() => router.push({ pathname: '/lead/new', params: { stage: PIPELINE[idx]!.stage } })} />}>
         {/* Potential commission: the number we never want an agent to miss. */}
         <Card style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 12 }}>
@@ -75,7 +77,7 @@ export default function Pipeline() {
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -16 }} contentContainerStyle={{ gap: 6, paddingHorizontal: 16, paddingVertical: 4 }}>
           {PIPELINE.map((b) => (
-            <Chip key={b.id} label={b.label} count={groups[b.id].length} on={b.id === stage} onPress={() => setStage(b.id)} />
+            <Chip key={b.id} label={b.label} count={(groups[b.id] ?? []).length} on={b.id === stage} onPress={() => setStage(b.id)} />
           ))}
         </ScrollView>
 
@@ -155,7 +157,7 @@ export default function Pipeline() {
                   <ListRow
                     key={b.id}
                     label={b.label}
-                    value={String(groups[b.id].length)}
+                    value={String((groups[b.id] ?? []).length)}
                     right={current ? <Icon name="check" size={18} color={c.accent} /> : <View style={{ width: 18 }} />}
                     onPress={() => move(sheet, b)}
                   />

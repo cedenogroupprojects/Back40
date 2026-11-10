@@ -98,8 +98,8 @@ export const SAMPLE_LEADS: Lead[] = [
 
 export const SAMPLE_DRAFTS: Draft[] = [
   { id: 'n1', leadId: 'mike', channel: 'text', play: 'nurture', status: 'pending', why: 'Said Chino, up to $750K, 3–6 months. This one just listed in range.', body: 'Hey Mike, this one in Chino just hit at $729K. 4 bed with a big yard, right in the range you gave me. Want to walk it Saturday?', home: { kind: 'listing', id: 'l:demo1', title: '15832 Orchid Ln', city: 'Chino', price: 729000, beds: '4', baths: 3 } },
-  { id: 'n2', leadId: 'rachel', channel: 'text', play: 'nurture', status: 'pending', why: 'We only know she’s looking around Eastvale. Asks budget so we can send homes.', body: 'Hi Rachel, it’s Jeffry. Still thinking Eastvale, or open to Chino and Ontario Ranch too? And roughly what price feels comfortable? I’ll send a few that fit.', home: null },
-  { id: 'd1', leadId: 'james', channel: 'text', play: 'speed_to_lead', status: 'pending', why: 'He asked about move-in ready homes on the form. Nobody has replied yet. First reply usually wins.', body: 'Hi James, it’s Jeffry. Saw you asked about the move-in ready homes. Want me to send what’s available and pricing? I can also show you this weekend.' },
+  { id: 'n2', leadId: 'rachel', channel: 'text', play: 'nurture', status: 'pending', why: 'We only know she’s looking around Eastvale. Asks budget so we can send homes.', body: 'Hi Rachel, it’s Taylor. Still thinking Eastvale, or open to Chino and Ontario Ranch too? And roughly what price feels comfortable? I’ll send a few that fit.', home: null },
+  { id: 'd1', leadId: 'james', channel: 'text', play: 'speed_to_lead', status: 'pending', why: 'He asked about move-in ready homes on the form. Nobody has replied yet. First reply usually wins.', body: 'Hi James, it’s Taylor. Saw you asked about the move-in ready homes. Want me to send what’s available and pricing? I can also show you this weekend.' },
   { id: 'd2', leadId: 'priya', channel: 'text', play: 'no_answer', status: 'pending', why: 'You called yesterday and didn’t reach her. A short text keeps your promise.', body: 'Hi Priya! Tried you earlier about the model home. Is now a good time, or would tomorrow work better?' },
   { id: 'd3', leadId: 'mike', channel: 'text', play: 'back40_sweep', status: 'pending', why: 'He looked at homes again this morning after 9 quiet days.', body: 'Hey Mike, a couple of new homes just opened up that fit what you and your wife were looking for. Want me to send them over?' },
   { id: 'd4', leadId: 'rachel', channel: 'email', play: 'recap', status: 'pending', why: 'She asked about HOA fees at the tour.', subject: 'HOA fees for the homes you toured', body: 'Hi Rachel, great meeting you at the model home. Here’s the HOA breakdown you asked about. Want to set up a second look?' },
@@ -108,7 +108,7 @@ export const SAMPLE_DRAFTS: Draft[] = [
 export const SAMPLE_TEAM: Agent[] = [
   { id: 'sam', name: 'Sam W.', initials: 'SW', role: 'agent', scoreThisWeek: 94, streakDays: 12, staleHotLeads: 0 },
   { id: 'alex', name: 'Alex R.', initials: 'AR', role: 'agent', scoreThisWeek: 88, streakDays: 7, staleHotLeads: 0 },
-  { id: 'me', name: 'You', initials: 'JG', role: 'owner', scoreThisWeek: 72, streakDays: 5, staleHotLeads: 0 },
+  { id: 'me', name: 'You', initials: 'TM', role: 'owner', scoreThisWeek: 72, streakDays: 5, staleHotLeads: 0 },
   { id: 'jordan', name: 'Jordan T.', initials: 'JT', role: 'agent', scoreThisWeek: 66, streakDays: 0, staleHotLeads: 1 },
   { id: 'dana', name: 'Dana M.', initials: 'DM', role: 'agent', scoreThisWeek: 58, streakDays: 0, staleHotLeads: 1 },
   { id: 'chris', name: 'Chris P.', initials: 'CP', role: 'agent', scoreThisWeek: 41, streakDays: 0, staleHotLeads: 2 },

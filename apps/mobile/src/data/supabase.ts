@@ -207,6 +207,12 @@ export async function setNurturePaused(leadId: string, paused: boolean) {
   if (error) throw error;
 }
 
+/** The stages a team's leads are in, with counts (for the pipeline board). */
+export async function fetchTeamStages(): Promise<{ stage: string; n: number }[]> {
+  const { data } = await supabase().rpc('team_stages');
+  return ((data ?? []) as { stage: string; n: number }[]).map((r) => ({ stage: r.stage, n: Number(r.n) }));
+}
+
 export const disconnectCrm = (kind: CrmKind) => fn<{ ok: boolean; removed: number }>('connect-crm', { kind, action: 'disconnect' });
 
 export const leadAction = (leadId: string, action: string, extra: Record<string, unknown> = {}) => fn('lead-action', { leadId, action, clientId: clientId(), ...extra });

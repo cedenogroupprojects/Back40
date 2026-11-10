@@ -40,7 +40,7 @@ export default function Today() {
         <T w="semibold" size={15} tone="accent">
           {today.length} to call.
         </T>{' '}
-        {newest ? `${newest.lead.firstName} just came in.` : `${greeting()}, ${settings.name}.`}
+        {newest ? `${newest.lead.firstName} just came in.` : `${greeting()}${settings.name ? `, ${settings.name}` : ''}.`}
       </T>
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -16 }} contentContainerStyle={{ gap: 6, paddingHorizontal: 16, paddingVertical: 4 }}>
