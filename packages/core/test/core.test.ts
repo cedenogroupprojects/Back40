@@ -161,3 +161,14 @@ test('nurture: rotates discovery questions; normalizes Lofty timeframes', async 
   assert.ok(n.DONE_STAGE.test('Closed') && !n.DONE_STAGE.test('Contacted'));
   assert.equal(mapLoftyLead({ leadId: 3, buyingTimeFrame: '3-6' } as never).fields.timeline, '3–6 months');
 });
+
+test('nurture: greets by name only when it looks like a name', async () => {
+  const n = await import('../src/nurture.ts');
+  assert.equal(n.greetableName('Leah'), 'Leah');
+  assert.equal(n.greetableName('maria'), 'Maria');
+  assert.equal(n.greetableName('Rlpmontanez'), null);
+  assert.equal(n.greetableName('Christopher'), 'Christopher');
+  assert.equal(n.greetableName('rlpmontanez'), null);
+  assert.equal(n.greetableName('jdog_23'), null);
+  assert.equal(n.greetableName(''), null);
+});

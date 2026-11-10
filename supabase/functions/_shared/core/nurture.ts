@@ -91,11 +91,20 @@ export type DraftContext = {
   voice?: string; // learned style notes, if any
 };
 
+/** A first name we can greet someone by, or null when the CRM has a handle like "rlpmontanez" or "jdog_23". */
+export function greetableName(raw: string | undefined | null): string | null {
+  const n = (raw ?? '').trim();
+  if (!n || n.length > 14 || /[\d_@.]/.test(n)) return null;
+  if (n === n.toLowerCase() && n.length > 8) return null; // all-lowercase long strings are usually usernames
+  if (!/[aeiouy]/i.test(n) || /^[^aeiouy]{4}/i.test(n)) return null; // "Rlpmontanez"
+  return n.charAt(0).toUpperCase() + n.slice(1);
+}
+
 /** The instructions the model gets. Facts only from the record, one clear ask, never generic. */
 export function nurturePrompt(c: DraftContext): string {
   const f = c.lead.fields;
   const facts = [
-    `First name: ${c.lead.firstName || 'unknown'}`,
+    `First name: ${greetableName(c.lead.firstName) ?? 'unknown (greet them without a name, e.g. "Hi there")'}`,
     c.lead.source ? `Came from: ${c.lead.source}` : null,
     `Stage: ${c.lead.stage}`,
     `Became a lead: ${c.lead.createdAt.slice(0, 10)}`,
@@ -131,7 +140,7 @@ GOAL: ${goal}
 RULES
 - Sound like a real person texting from their phone: short, warm, specific. ${c.channel === 'text' ? 'Max 300 characters. No emojis unless natural. No links other than the one given.' : 'Max 90 words. Plain text, no formatting.'}
 - Never say "just checking in", "touching base", "hope this finds you well", "hope your year's going well", or anything that reads like a mass message. No small talk filler; get to the point in the first sentence.
-- Use their first name once. ${c.step === 0 ? `Since this may be the first message in a while, say who you are ("it's ${c.agentName.split(' ')[0]}").` : 'Do not re-introduce yourself.'}
+- Use their first name once if we have one. ${c.step === 0 ? `Since this may be the first message in a while, say who you are ("it's ${c.agentName.split(' ')[0]}").` : 'Do not re-introduce yourself.'}
 - Only use facts above. Never invent prices, homes, addresses, rates, dates or promises.
 - Never show the lead our internal labels: no CRM stage names ("Sent to Lender", "Contacted"), campaign or source codes (e.g. "NB4Y", "IG Messenger", "text code"), tags or scores. You may say "Instagram" or "Facebook" only if the source plainly says so.
 - Fair housing: never describe a place by who lives there; no schools-as-demographics, no "family neighborhood" style steering.
