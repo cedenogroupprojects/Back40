@@ -1,6 +1,6 @@
 // Shared by the sync worker and connect-crm: turn a CRM lead into a Back 40
 // lead row (with heat + label), and create the "new lead" nudge.
-import { DEFAULT_RULES, heatScore, labelFor, type CrmLeadInput, type Lead } from './core/index.ts';
+import { DEFAULT_RULES, heatScore, labelFor, type CrmLeadInput, type CrmNote, type Lead } from './core/index.ts';
 import type { Connection, serviceClient } from './db.ts';
 
 type Db = ReturnType<typeof serviceClient>;
@@ -62,4 +62,32 @@ export async function upsertLead(db: Db, conn: Connection, l: CrmLeadInput, isNe
     });
   }
   return saved;
+}
+
+/** Copy the lead's existing CRM notes onto its Back 40 timeline (deduped by note id). */
+export async function importNotes(db: Db, orgId: string, leadId: string, notes: CrmNote[]) {
+  if (!notes.length) return 0;
+  const rows = notes.map((n) => ({
+    org_id: orgId,
+    lead_id: leadId,
+    at: n.at,
+    kind: 'note',
+    title: n.author ? `Note · ${n.author}` : 'Note',
+    body: n.body.slice(0, 4000),
+    source: 'crm',
+    crm_ref: `note:${n.id}`,
+  }));
+  const { error } = await db.from('timeline_items').upsert(rows, { onConflict: 'lead_id,source,crm_ref' });
+  if (error) throw new Error(`notes upsert: ${error.message}`);
+  return rows.length;
+}
+
+/** Queue a notes import for this connection's active leads, 25 per job. */
+export async function queueNotesImport(db: Db, conn: Connection) {
+  const { data } = await db.from('leads').select('id, stage').eq('connection_id', conn.id).not('assigned_user_id', 'is', null).limit(10000);
+  const ids = (data ?? []).filter((l) => !DONE_STAGE.test(l.stage as string)).map((l) => l.id as string);
+  for (let i = 0; i < ids.length; i += 25) {
+    await db.from('sync_inbox').insert({ connection_id: conn.id, crm: conn.kind, kind: 'notes', raw: { leadIds: ids.slice(i, i + 25) } });
+  }
+  return ids.length;
 }

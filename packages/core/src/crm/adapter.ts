@@ -33,6 +33,15 @@ export interface CrmEvent {
   raw: unknown;
 }
 
+/** A note already in the CRM (agents' past notes on the lead). */
+export interface CrmNote {
+  id: string;
+  at: string;
+  body: string;
+  author?: string;
+  pinned?: boolean;
+}
+
 export interface CrmCapabilities {
   sendText: boolean; // false → app falls back to the phone's Messages and logs it
   sendEmail: boolean;
@@ -49,6 +58,8 @@ export interface CrmAdapter {
   listLeads(creds: CrmCredentials, cursor: string | null, opts?: { updatedSince?: string; assignedTo?: string }): Promise<Page<CrmLeadInput>>;
   getLead(creds: CrmCredentials, crmLeadId: string): Promise<CrmLeadInput | null>;
 
+  /** The lead's existing notes, newest first (system notes skipped). */
+  listNotes(creds: CrmCredentials, crmLeadId: string): Promise<CrmNote[]>;
   addNote(creds: CrmCredentials, crmLeadId: string, body: string): Promise<void>;
   logCall(creds: CrmCredentials, crmLeadId: string, call: { outcome: CallOutcome; note?: string; durationSec?: number; phone?: string }): Promise<void>;
   /** potentialCommission is written to a "Potential Commission" custom field the team creates once. */

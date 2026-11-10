@@ -215,16 +215,16 @@ async function findListing(lead: LeadRow, f: LeadFields, sent: Set<string>, cach
   return null;
 }
 
-// VERIFY against a live Lofty listings response (key needs Listings → View).
+// Shape verified against a live Lofty /v2.0/listings/search response.
 function toListingCard(r: Record<string, unknown>, website: string | null): HomeCard | null {
   const pick = (...keys: string[]) => keys.map((k) => r[k]).find((v) => v !== undefined && v !== null && v !== '');
-  const id = pick('listingId', 'id', 'mlsListingId', 'mlsNumber');
+  const id = pick('mlsListingId', 'listingId', 'id', 'mlsNumber');
   const address = pick('streetAddress', 'address', 'fullAddress', 'displayAddress');
   if (id == null || !address) return null;
   const price = Number(pick('price', 'listPrice', 'listingPrice')) || undefined;
-  const photos = pick('photos', 'pictures', 'photoUrls') as unknown;
-  const photo = (Array.isArray(photos) ? photos[0] : pick('photo', 'picture', 'mainPhoto', 'coverPhoto')) as string | undefined;
-  const url = (pick('detailUrl', 'listingUrl', 'url', 'siteUrl') as string | undefined) ?? (website ? undefined : undefined);
+  const photos = pick('photos', 'pictures', 'photoUrls', 'pictureList') as unknown;
+  const photo = (Array.isArray(photos) ? photos[0] : pick('previewPicture', 'photo', 'picture', 'mainPhoto', 'coverPhoto')) as string | undefined;
+  const url = pick('siteDetailLink', 'detailUrl', 'listingUrl', 'url', 'siteUrl') as string | undefined;
   return {
     kind: 'listing',
     id: `l:${id}`,

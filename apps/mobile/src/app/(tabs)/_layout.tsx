@@ -52,9 +52,6 @@ export default function TabLayout() {
         <TabTrigger name="pipeline" href="/pipeline" asChild>
           <TabButton icon="board" label="Pipeline" />
         </TabTrigger>
-        <TabTrigger name="week" href="/week" asChild>
-          <TabButton icon="week" label="Week" />
-        </TabTrigger>
         <TabTrigger name="me" href="/me" asChild>
           <TabButton icon="me" label="Me" />
         </TabTrigger>

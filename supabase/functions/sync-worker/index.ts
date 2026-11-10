@@ -8,7 +8,7 @@
 //             each CRM's rate limit, retried with backoff, never duplicated.
 import { ADAPTERS, CrmError } from '../_shared/core/index.ts';
 import { backoffSeconds, credentialsFor, json, preflight, serviceClient, type Connection } from '../_shared/db.ts';
-import { upsertLead } from '../_shared/sync.ts';
+import { importNotes, queueNotesImport, upsertLead } from '../_shared/sync.ts';
 
 const BACKFILL_MAX_PAGES = 50; // first import, per agent: up to 5,000 of their most recently active leads
 
@@ -53,8 +53,22 @@ async function processInbox() {
         const n = (raw.page ?? 1) + 1;
         if (page.nextCursor && n <= BACKFILL_MAX_PAGES) {
           await db.from('sync_inbox').insert({ connection_id: conn.id, crm: conn.kind, kind: 'backfill', raw: { cursor: page.nextCursor, page: n, assignee: raw.assignee } });
+        } else {
+          // Import finished: bring over everyone's past notes so lead cards have history.
+          await queueNotesImport(db, conn);
         }
         await db.from('crm_connections').update({ last_synced_at: new Date().toISOString() }).eq('id', conn.id);
+        await db.from('sync_inbox').update({ processed_at: new Date().toISOString(), last_error: null }).eq('id', job.id);
+        done++;
+        continue;
+      }
+      if (job.kind === 'notes') {
+        const ids = ((job.raw as { leadIds?: string[] }).leadIds ?? []).slice(0, 50);
+        const { data: rows } = await db.from('leads').select('id, org_id, crm_lead_id').in('id', ids);
+        for (const r of rows ?? []) {
+          await throttle(conn.id, adapter.capabilities.maxRequestsPerMinute);
+          await importNotes(db, r.org_id as string, r.id as string, await adapter.listNotes(creds, r.crm_lead_id as string));
+        }
         await db.from('sync_inbox').update({ processed_at: new Date().toISOString(), last_error: null }).eq('id', job.id);
         done++;
         continue;
@@ -66,7 +80,11 @@ async function processInbox() {
         }
         await throttle(conn.id, adapter.capabilities.maxRequestsPerMinute);
         const fresh = await adapter.getLead(creds, crmLeadId);
-        if (fresh) await upsertLead(db, conn, fresh, job.kind === 'lead_created');
+        const row = fresh ? await upsertLead(db, conn, fresh, job.kind === 'lead_created') : null;
+        if (row && (job.kind === 'note' || job.kind === 'lead_created')) {
+          await throttle(conn.id, adapter.capabilities.maxRequestsPerMinute);
+          await importNotes(db, conn.org_id, row.id as string, await adapter.listNotes(creds, crmLeadId));
+        }
       }
       await db.from('sync_inbox').update({ processed_at: new Date().toISOString(), last_error: null }).eq('id', job.id);
       done++;

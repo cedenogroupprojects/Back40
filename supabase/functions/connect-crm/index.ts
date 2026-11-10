@@ -70,6 +70,10 @@ Deno.serve(async (req) => {
     : await db.from('crm_connections').insert(fields).select('*').single<Connection>();
   if (cErr || !conn) return json({ error: 'Could not save the connection.' }, 500);
 
+  // Reconnecting after a disconnect: pick the team's existing leads (history,
+  // notes, nurture) back up instead of importing them as new.
+  await db.from('leads').update({ connection_id: conn.id }).eq('org_id', member.org_id).eq('crm', kind).is('connection_id', null);
+
   let imported = 0;
   for (const l of first.items) {
     try {

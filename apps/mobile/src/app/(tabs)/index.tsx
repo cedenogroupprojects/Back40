@@ -78,7 +78,11 @@ export default function Today() {
 
       <SectionLabel>Ready for you</SectionLabel>
       <List>
-        {pending > 0 ? <ListRow label="Messages to approve" sub="Keeping in touch with your other leads" value={String(pending)} onPress={() => router.push('/approve')} /> : null}
+        {pending > 0 ? (
+          <ListRow label="Messages to approve" sub="Personal follow-ups for your other leads" value={String(pending)} onPress={() => router.push('/approve')} />
+        ) : (
+          <ListRow label="Keeping in touch" sub={isLiveMode ? 'New follow-ups are written every morning for you to approve' : 'Personal follow-ups for your other leads'} onPress={() => router.push(isLiveMode ? '/nurture' : '/approve')} />
+        )}
         <ListRow label="Morning briefing" value="2 min" onPress={() => router.push('/briefing')} />
       </List>
       <T size={12} tone="sub" style={{ textAlign: 'center', marginTop: 4 }}>

@@ -129,6 +129,16 @@ export const lofty: CrmAdapter = {
     return res ? mapLoftyLead(res) : null;
   },
 
+  // Verified live: GET /v1.0/notes?leadId= → { notes: [{ noteId, content, createTime, creatorName, isPin, systemNote, deleteFlag }] }
+  async listNotes(c, id) {
+    const res = (await crmFetch(`${BASE}/v1.0/notes?leadId=${encodeURIComponent(id)}&limit=50`, { headers: headers(c) })) as
+      | { notes?: { id?: number | string; noteId?: number | string; content?: string; createTime?: string; creatorName?: string; isPin?: boolean; systemNote?: boolean; deleteFlag?: boolean }[] }
+      | null;
+    return (res?.notes ?? [])
+      .filter((n) => !n.systemNote && !n.deleteFlag && n.content?.trim())
+      .map((n) => ({ id: String(n.noteId ?? n.id), at: toIso(n.createTime) ?? new Date().toISOString(), body: n.content!.trim(), author: n.creatorName, pinned: !!n.isPin }));
+  },
+
   async addNote(c, id, body) {
     await crmFetch(`${BASE}/v1.0/notes`, { method: 'POST', headers: headers(c), body: JSON.stringify({ leadId: Number(id), content: body }) });
   },

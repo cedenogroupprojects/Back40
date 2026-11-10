@@ -64,6 +64,13 @@ export const goHighLevel: CrmAdapter = {
     return res?.contact ? mapGhlContact(res.contact) : null;
   },
 
+  async listNotes(c, id) {
+    const res = (await crmFetch(`${BASE}/contacts/${id}/notes`, { headers: headers(c) })) as { notes?: { id: string; body?: string; dateAdded?: string }[] } | null;
+    return (res?.notes ?? [])
+      .filter((n) => n.body?.trim())
+      .map((n) => ({ id: n.id, at: n.dateAdded ?? new Date().toISOString(), body: n.body!.trim() }));
+  },
+
   async addNote(c, id, body) {
     await crmFetch(`${BASE}/contacts/${id}/notes`, { method: 'POST', headers: headers(c), body: JSON.stringify({ body }) });
   },

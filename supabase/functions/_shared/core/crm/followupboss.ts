@@ -78,6 +78,15 @@ export const followUpBoss: CrmAdapter = {
     return p ? mapFubPerson(p) : null;
   },
 
+  async listNotes(c, id) {
+    const res = (await crmFetch(`${BASE}/notes?personId=${encodeURIComponent(id)}&limit=50&sort=-created`, { headers: headers(c) })) as
+      | { notes?: { id: number; body?: string; subject?: string; created?: string; createdBy?: string }[] }
+      | null;
+    return (res?.notes ?? [])
+      .filter((n) => n.body?.trim())
+      .map((n) => ({ id: String(n.id), at: n.created ?? new Date().toISOString(), body: [n.subject, n.body].filter(Boolean).join('\n').trim(), author: n.createdBy }));
+  },
+
   async addNote(c, id, body) {
     await crmFetch(`${BASE}/notes`, { method: 'POST', headers: headers(c), body: JSON.stringify({ personId: Number(id), subject: 'Back 40', body }) });
   },
