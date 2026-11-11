@@ -12,6 +12,7 @@
 // so the list is explainable and works even if the AI is down.
 
 import type { HotRules, Lead, LeadLabel, RankedLead } from './types.ts';
+import { classifyStage } from './pipeline.ts';
 
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
@@ -150,7 +151,7 @@ export function hotAndWarm(leads: Lead[], rules: HotRules = DEFAULT_RULES, now =
   return { hot: all.filter(isHot), warm: all.filter((r) => !isHot(r)) };
 }
 
-export function rankToday(leads: Lead[], rules: HotRules = DEFAULT_RULES, now = Date.now()): RankedLead[] {
+export function rankToday(leads: Lead[], rules: HotRules = DEFAULT_RULES, now = Date.now(), extra = 0): RankedLead[] {
   const ranked = rankEligible(leads, rules, now);
 
   const brandNew = ranked
@@ -159,9 +160,25 @@ export function rankToday(leads: Lead[], rules: HotRules = DEFAULT_RULES, now = 
   const rest = ranked.filter((r) => r.label !== 'brand_new').sort((a, b) => b.heat - a.heat);
 
   // Brand-new and pinned leads are guaranteed a spot; others fill up to the cap.
+  const cap = rules.cap + extra;
   const out: RankedLead[] = [...brandNew];
   for (const r of rest) {
-    if (out.length < rules.cap || r.lead.pinned) out.push(r);
+    if (out.length < cap || r.lead.pinned) out.push(r);
+  }
+  // Always a full list: top up with the best of everyone else still in play
+  // (not closed or dead, not reached in the last day), CRM score first, then
+  // whoever has gone longest without hearing from us.
+  if (out.length < cap) {
+    const taken = new Set(out.map((r) => r.lead.id));
+    const filler = leads
+      .filter((l) => !taken.has(l.id) && classifyStage(l.stage).kind === 'active' && daysSinceContact(l, now) >= 1 && !(l.fields.doNotCall && l.fields.doNotText))
+      .sort((a, b) => (b.fields.crmScore ?? 0) - (a.fields.crmScore ?? 0) || Math.min(daysSinceContact(b, now), 9999) - Math.min(daysSinceContact(a, now), 9999))
+      .slice(0, cap - out.length)
+      .map((lead) => {
+        const label = labelFor(lead, rules, now);
+        return { lead, heat: heatScore(lead, rules, now), label, reason: lead.aiWhyNow ?? fallbackReason(lead, label, now) };
+      });
+    out.push(...filler);
   }
   return out;
 }

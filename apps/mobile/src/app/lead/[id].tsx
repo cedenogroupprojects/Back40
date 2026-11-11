@@ -1,17 +1,17 @@
-// Page 2 — Lead detail. Everything needed before dialing, so the agent never
+// Page 2 — Lead detail (card stack style, Nov 11). Everything needed before dialing, so the agent never
 // opens the CRM first. Decisions (Nov 7): AI summary collapsed to 2 lines;
 // history shows 20 + "Load more"; stage / follow-up / tags / notes editable
 // and written back to the CRM; phone, email, source stay CRM-only.
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Pressable, TextInput, View } from 'react-native';
+import { Image, Linking, Pressable, ScrollView, TextInput, View } from 'react-native';
 
-import { labelFor } from '@back40/core';
+import { BADGE_TEXT, labelFor } from '@back40/core';
 
 import { Icon, type IconName } from '@/components/Icon';
-import { Avatar, Card, Chip, Dot, IconButton, List, ListRow, Row, Screen, SectionLabel, T } from '@/components/ui';
-import { STATUS_TEXT, statusColor } from '@/lib/status';
-import { initials, money, relTime, useStore } from '@/data/store';
+import { Card, Chip, List, ListRow, Row, Screen, SectionLabel, T } from '@/components/ui';
+import { STATUS_TEXT } from '@/lib/status';
+import { money, relTime, useStore } from '@/data/store';
 import { callLead, textLead } from '@/lib/actions';
 import { SOURCE_NAME } from '@/lib/crm';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -20,7 +20,7 @@ import { font } from '@/theme/tokens';
 export default function LeadDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { c } = useTheme();
-  const { lead: get, stages, settings, labelText, updateLead, addNote, togglePin, loadTimeline } = useStore();
+  const { lead: get, stages, settings, updateLead, addNote, togglePin, loadTimeline, dealsFor } = useStore();
   const lead = get(id);
   const [moreSummary, setMoreSummary] = useState(false);
   const [shown, setShown] = useState(20);
@@ -34,59 +34,115 @@ export default function LeadDetail() {
   const now = Date.now();
   const label = labelFor(lead, settings.rules, now);
 
-  const color = statusColor(label, c);
-  const action = (icon: IconName, text: string, onPress: () => void) => (
-    <Pressable accessibilityRole="button" accessibilityLabel={`${text} ${lead.firstName}`} onPress={onPress} style={({ pressed }) => ({ flex: 1, minHeight: 58, borderRadius: 12, backgroundColor: c.card, alignItems: 'center', justifyContent: 'center', gap: 4, opacity: pressed ? 0.6 : 1 })}>
-      <Icon name={icon} size={20} color={c.accent} />
-      <T w="medium" size={12} tone="accent">
+  const big = (icon: IconName, text: string, onPress: () => void, primary?: boolean) => (
+    <Pressable accessibilityRole="button" accessibilityLabel={`${text} ${lead.firstName}`} onPress={onPress} style={({ pressed }) => ({ flex: 1, height: 64, borderRadius: 20, backgroundColor: primary ? c.accent : c.text, alignItems: 'center', justifyContent: 'center', gap: 4, opacity: pressed ? 0.8 : 1 })}>
+      <Icon name={icon} size={20} color={primary ? '#FFFFFF' : c.bg} />
+      <T w="bold" size={14} style={{ color: primary ? '#FFFFFF' : c.bg }}>
         {text}
       </T>
     </Pressable>
   );
+  const f = lead.fields;
+  const chips = [...(f.areas ?? []), f.budgetMax ? `${f.budgetMin ? `${money(f.budgetMin)}–` : 'Up to '}${money(f.budgetMax)}` : null, f.bedsMin ? `${f.bedsMin}+ beds` : null, f.timeline ?? null, f.preApproved ? 'Pre-approved' : null].filter(Boolean) as string[];
+  const deals = dealsFor(lead.id);
+  const contacted = lead.lastContactAt ? `Last contact ${relTime(lead.lastContactAt)}` : 'Never contacted';
 
   return (
     <Screen bottomSpace={40}>
-      <Row style={{ justifyContent: 'space-between', marginHorizontal: -6 }}>
-        <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={() => router.back()} hitSlop={8} style={{ flexDirection: 'row', alignItems: 'center', gap: 2, minHeight: 36 }}>
-          <Icon name="back" size={22} color={c.accent} width={2.2} />
-          <T size={17} style={{ color: c.accent }}>
-            Back
-          </T>
+      <Row style={{ justifyContent: 'space-between' }}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={() => router.back()} style={({ pressed }) => ({ width: 44, height: 44, borderRadius: 22, backgroundColor: c.card, borderWidth: 1, borderColor: c.sep, alignItems: 'center', justifyContent: 'center', opacity: pressed ? 0.7 : 1 })}>
+          <Icon name="back" size={20} color={c.text} width={2.4} />
         </Pressable>
-        <IconButton icon="pin" label={lead.pinned ? 'Unpin from Today' : 'Pin to Today'} onPress={() => togglePin(lead.id)} />
+        <T w="semibold" size={13} tone="sub">
+          {lead.crm === 'manual' ? 'Added in Back 40' : `Synced with ${SOURCE_NAME[lead.crm]}`}
+        </T>
+        <Pressable accessibilityRole="button" accessibilityLabel={lead.pinned ? 'Unpin from Today' : 'Pin to Today'} onPress={() => togglePin(lead.id)} style={({ pressed }) => ({ width: 44, height: 44, borderRadius: 22, backgroundColor: lead.pinned ? c.text : c.card, borderWidth: 1, borderColor: lead.pinned ? c.text : c.sep, alignItems: 'center', justifyContent: 'center', opacity: pressed ? 0.7 : 1 })}>
+          <Icon name="pin" size={19} color={lead.pinned ? c.bg : c.text} />
+        </Pressable>
       </Row>
 
-      <View style={{ alignItems: 'center', gap: 4, marginBottom: 4 }}>
-        <Avatar initials={initials(lead)} size={72} />
-        <T w="bold" size={26} style={{ marginTop: 6 }}>
+      <View style={{ gap: 8, paddingHorizontal: 4, marginTop: 6 }}>
+        <View style={{ alignSelf: 'flex-start', backgroundColor: c.accent, borderRadius: 999, paddingHorizontal: 11, paddingVertical: 6 }}>
+          <T w="bold" size={12} style={{ color: '#FFFFFF', letterSpacing: 0.6 }}>
+            {STATUS_TEXT[label].toLowerCase() === lead.stage.toLowerCase() || STATUS_TEXT[label] === 'Working' ? lead.stage.toUpperCase() : `${STATUS_TEXT[label].toUpperCase()} · ${lead.stage.toUpperCase()}`}
+          </T>
+        </View>
+        <T w="heavy" size={38} style={{ lineHeight: 41 }}>
           {lead.firstName} {lead.lastName}
         </T>
-        <Row gap={6}>
-          <Dot color={color} />
-          <T size={14} tone="body">
-            {STATUS_TEXT[label].toLowerCase() === lead.stage.toLowerCase() ? lead.stage : `${STATUS_TEXT[label]} · ${lead.stage}`}
-          </T>
-        </Row>
-        <T size={12} tone="sub">
-          {lead.touches} touches · {lead.lastContactAt ? `last contact ${relTime(lead.lastContactAt)}` : 'never contacted'} · {lead.crm === 'manual' ? 'added in Back 40' : `synced with ${SOURCE_NAME[lead.crm]}`}
+        <T size={16} tone="sub">
+          {contacted}
+          {lead.source ? ` · ${lead.source}` : ''}
         </T>
       </View>
 
-      <Row gap={8}>
-        {action('phone', 'Call', () => callLead(lead))}
-        {action('text', 'Text', () => textLead(lead))}
-        {action('mail', 'Email', () => router.push(`/compose/${lead.id}?channel=email`))}
+      <Row gap={10} style={{ marginTop: 4 }}>
+        {big('phone', 'Call', () => callLead(lead), true)}
+        {big('text', 'Text', () => textLead(lead))}
+        {big('mail', 'Email', () => router.push(`/compose/${lead.id}?channel=email`))}
       </Row>
 
-      <SectionLabel>Why now</SectionLabel>
-      <Card style={{ gap: 4 }}>
-        <T size={16}>{lead.aiWhyNow ?? (lead.crm === 'manual' ? (lead.lastContactAt ? `You last reached out ${relTime(lead.lastContactAt)}.` : 'You added this lead. Make the first call.') : 'Recent activity in your CRM.')}</T>
+      <Card style={{ gap: 6 }}>
+        <T w="bold" size={12} tone="accent" style={{ letterSpacing: 0.8 }}>
+          WHY NOW
+        </T>
+        <T w="semibold" size={17} style={{ lineHeight: 23 }}>
+          {lead.aiWhyNow ?? (lead.crm === 'manual' ? (lead.lastContactAt ? `You last reached out ${relTime(lead.lastContactAt)}.` : 'You added this lead. Make the first call.') : 'Recent activity in your CRM.')}
+        </T>
         {lead.aiOpener ? (
-          <T size={14} tone="sub">
-            Try opening with "{lead.aiOpener}"
+          <T size={15} tone="body">
+            Open with “{lead.aiOpener}”
           </T>
         ) : null}
       </Card>
+
+      {chips.length ? (
+        <>
+          <SectionLabel>What they want</SectionLabel>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+            {chips.map((x) => (
+              <View key={x} style={{ backgroundColor: c.card, borderWidth: 1, borderColor: c.sep, borderRadius: 999, paddingHorizontal: 13, paddingVertical: 8 }}>
+                <T w="semibold" size={14}>
+                  {x}
+                </T>
+              </View>
+            ))}
+          </View>
+        </>
+      ) : null}
+
+      {deals.length ? (
+        <>
+          <SectionLabel>Deals for {lead.firstName || 'them'}</SectionLabel>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -16 }} contentContainerStyle={{ gap: 12, paddingHorizontal: 16 }}>
+            {deals.map((h) => (
+              <Pressable key={h.id} accessibilityRole="link" accessibilityLabel={`Open ${h.title}`} disabled={!h.url} onPress={() => h.url && void Linking.openURL(h.url)} style={({ pressed }) => ({ width: 232, borderRadius: 20, overflow: 'hidden', backgroundColor: c.card, borderWidth: 1, borderColor: c.sep, opacity: pressed ? 0.85 : 1 })}>
+                <View style={{ height: 124, backgroundColor: c.track }}>
+                  {h.photo ? <Image source={{ uri: h.photo }} style={{ width: '100%', height: '100%' }} accessibilityIgnoresInvertColors /> : null}
+                  {h.badge ? (
+                    <View style={{ position: 'absolute', left: 10, top: 10, backgroundColor: h.badge === 'price_drop' ? c.accent : c.text, borderRadius: 999, paddingHorizontal: 9, paddingVertical: 5 }}>
+                      <T w="bold" size={11} style={{ color: h.badge === 'price_drop' ? '#FFFFFF' : c.bg, letterSpacing: 0.5 }}>
+                        {BADGE_TEXT[h.badge].toUpperCase()}
+                      </T>
+                    </View>
+                  ) : null}
+                </View>
+                <View style={{ padding: 12, gap: 2 }}>
+                  <T w="heavy" size={18}>
+                    {h.price ? money(h.price, false) : 'Price on request'}
+                  </T>
+                  <T w="semibold" size={14} numberOfLines={1}>
+                    {h.title}
+                  </T>
+                  <T size={13} tone="sub" numberOfLines={1}>
+                    {[h.city, h.beds ? `${h.beds} bd` : null, h.baths ? `${h.baths} ba` : null, h.sqft ? `${h.sqft.toLocaleString('en-US')} sqft` : null].filter(Boolean).join(' · ')}
+                  </T>
+                </View>
+              </Pressable>
+            ))}
+          </ScrollView>
+        </>
+      ) : null}
 
       {lead.aiSummary ? (
         <>

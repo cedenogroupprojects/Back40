@@ -53,8 +53,15 @@ test('nurture lead with new activity comes back (Back 40 sweep)', () => {
   assert.equal(list[0]?.label, 'back_again');
 });
 
-test('non-hot, inactive lead stays off Today', () => {
-  assert.equal(rankToday([lead({ id: 'quiet' })], DEFAULT_RULES, NOW).length, 0);
+test('quiet leads only fill Today after every hot one, and closed ones never do', () => {
+  const hot = lead({ id: 'hot', createdAt: hoursAgo(1), lastContactAt: null });
+  const quiet = lead({ id: 'quiet' });
+  const closed = lead({ id: 'closed', stage: 'Closed' });
+  const today = rankToday([quiet, closed, hot], DEFAULT_RULES, NOW);
+  assert.deepEqual(today.map((r) => r.lead.id), ['hot', 'quiet']);
+  // "Give me 5 more" raises the cap.
+  assert.equal(rankToday([quiet, hot], { ...DEFAULT_RULES, cap: 1 }, NOW).length, 1);
+  assert.equal(rankToday([quiet, hot], { ...DEFAULT_RULES, cap: 1 }, NOW, 5).length, 2);
 });
 
 test('heat is bounded 0-100', () => {

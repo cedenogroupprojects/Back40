@@ -19,6 +19,7 @@ import {
   type CallOutcome,
   type CrmKind,
   type Draft,
+  type HomeCard,
   type HotRules,
   type Lead,
   type LeadFields,
@@ -64,6 +65,10 @@ type Store = {
   onboarded: boolean;
   leads: Lead[];
   today: RankedLead[];
+  /** "Give me 5 more": raise today's list by 5. */
+  moreToday: () => void;
+  /** Deal homes Back 40 found for a lead (from its waiting follow-up), best first. */
+  dealsFor: (leadId: string) => HomeCard[];
   /** The team's own CRM stages as board columns (sample columns in demo). */
   pipeline: Bucket[];
   /** Every stage the team uses, for stage pickers (board first, then done/dead). */
@@ -237,7 +242,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const now = Date.now();
-  const today = useMemo(() => rankToday(leads, settings.rules, now), [leads, settings.rules, now]);
+  const [extraToday, setExtraToday] = useState(0);
+  const today = useMemo(() => rankToday(leads, settings.rules, now, extraToday), [leads, settings.rules, now, extraToday]);
+  const moreToday = () => setExtraToday((n) => n + 5);
+  const dealsFor = (leadId: string): HomeCard[] => {
+    const d = drafts.find((x) => x.leadId === leadId && x.status === 'pending' && (x.home || x.homeOptions?.length));
+    if (!d) return [];
+    const list = [...(d.home ? [d.home] : []), ...(d.homeOptions ?? [])].filter((h) => h.kind === 'listing');
+    return list.filter((h, i) => list.findIndex((x) => x.id === h.id) === i);
+  };
   // Board columns: the team's CRM stages plus any stage this agent's leads are in.
   const pipeline = useMemo(() => {
     if (!isLiveMode) return PIPELINE;
@@ -408,7 +421,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const value: Store = {
     status, isLiveMode, profile, notice, clearNotice: () => setNotice(null), enterDemo, reload, loadTimeline, signOut,
-    settings, onboarded, leads, today, pipeline, stages, drafts, nudges, team, stale, lead,
+    settings, onboarded, leads, today, moreToday, dealsFor, pipeline, stages, drafts, nudges, team, stale, lead,
     week,
     callsToday: calls.length,
     score,
