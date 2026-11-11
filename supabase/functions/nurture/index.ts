@@ -21,6 +21,8 @@ import { credentialsFor, json, preflight, serviceClient, userClient, type Connec
 const MODEL = Deno.env.get('AI_MODEL_SMART') ?? 'claude-sonnet-5-5';
 const FAST_MODEL = Deno.env.get('AI_MODEL_FAST') ?? 'claude-haiku-5-5';
 const HOME_OPTIONS = 5;
+const NOTES_PER_RUN = 30;
+const NEVER = '1970-01-01T00:00:00.000Z'; // notesReadAt for 'checked, nothing to read yet'
 const CAN_SEND: Record<string, boolean> = { lofty: true, gohighlevel: true }; // Follow Up Boss can't send through its API
 const db = serviceClient();
 
@@ -48,6 +50,15 @@ Deno.serve(async (req) => {
         results.push(await runFor(s, { force: false }));
       } catch (e) {
         console.error('nurture run failed', s.user_id, String(e).slice(0, 300));
+      }
+    }
+    // Keep reading agents' notes for area/budget/beds, a batch every run, so
+    // home matching works for every lead (not only the ones due today).
+    for (const s of (all ?? []) as Settings[]) {
+      try {
+        await readPendingNotes(s, NOTES_PER_RUN);
+      } catch (e) {
+        console.error('notes backfill failed', s.user_id, String(e).slice(0, 300));
       }
     }
     // Auto mode: send anything whose time has come.
@@ -331,11 +342,18 @@ async function promptFor(lead: LeadRow, fields: LeadFields, o: { agentName: stri
  * Fill area / budget / beds from the agent's notes when the CRM fields are blank.
  * Runs once per new batch of notes; CRM values always win.
  */
-async function criteriaFromNotes(lead: LeadRow, fields: LeadFields, s: Settings): Promise<LeadFields> {
-  if (fields.areas?.length && fields.budgetMax && fields.bedsMin) return fields;
+async function criteriaFromNotes(lead: LeadRow, fields: LeadFields, s: Pick<Settings, 'org_id' | 'user_id'>): Promise<LeadFields> {
+  const mark = async () => {
+    if (fields.notesReadAt) return fields;
+    const next = { ...fields, notesReadAt: NEVER };
+    await db.from('leads').update({ fields: next }).eq('id', lead.id);
+    return next;
+  };
+  if (fields.areas?.length && fields.budgetMax && fields.bedsMin) return mark();
   const { data: notes } = await db.from('timeline_items').select('at, body').eq('lead_id', lead.id).eq('kind', 'note').order('at', { ascending: false }).limit(12);
-  const latest = notes?.[0]?.at as string | undefined;
-  if (!latest || (fields.notesReadAt && fields.notesReadAt >= latest)) return fields;
+  const latest = notes?.[0]?.at ? new Date(notes[0].at as string).toISOString() : undefined;
+  if (!latest) return mark();
+  if (fields.notesReadAt && fields.notesReadAt >= latest) return fields;
   let found: ReturnType<typeof parseCriteria> = {};
   try {
     found = parseCriteria(await askModel(criteriaFromNotesPrompt(notes!.map((n) => String(n.body ?? ''))), s, FAST_MODEL, 200));
@@ -353,6 +371,22 @@ async function criteriaFromNotes(lead: LeadRow, fields: LeadFields, s: Settings)
   };
   await db.from('leads').update({ fields: next }).eq('id', lead.id);
   return next;
+}
+
+/** Read notes for leads we haven't read yet (newest activity first). */
+async function readPendingNotes(s: Settings, max: number) {
+  const { data: rows } = await db
+    .from('leads')
+    .select('*')
+    .eq('org_id', s.org_id)
+    .eq('assigned_user_id', s.user_id)
+    .is('fields->>notesReadAt', null)
+    .order('updated_at', { ascending: false })
+    .limit(max);
+  for (const lead of (rows ?? []) as LeadRow[]) {
+    if (DONE_STAGE.test(lead.stage)) continue;
+    await criteriaFromNotes(lead, (lead.fields ?? {}) as LeadFields, s);
+  }
 }
 
 /** The agent picked a different home from the 5 options: rewrite the message around it. */
