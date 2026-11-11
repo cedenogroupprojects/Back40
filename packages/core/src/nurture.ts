@@ -294,3 +294,14 @@ Everything we actually know about the home: ${known.join('; ')}.
 Does the text claim anything about the HOME (features, size, yard, condition, upgrades, views, schools, neighborhood) that is not in that list? Statements about the buyer, the agent, timing or a showing are fine.
 Return JSON only: {"ok": true} or {"ok": false, "problem": "what it made up"}`;
 }
+
+/** Texts read best with the question last and the link on its own line under it. */
+export function linkLast(body: string): string {
+  const urls = body.match(/https?:\/\/\S+/g);
+  if (!urls?.length) return body.trim();
+  let text = body;
+  for (const u of urls) text = text.replace(u, ' ');
+  text = text.replace(/[ \t]+/g, ' ').replace(/ +([,.!?])/g, '$1').replace(/\s*\n\s*/g, '\n').trim().replace(/[:\-–—]\s*$/, '').trim();
+  const clean = urls.map((u) => u.replace(/[).,!?]+$/, ''));
+  return `${text}\n\n${[...new Set(clean)].join('\n')}`;
+}

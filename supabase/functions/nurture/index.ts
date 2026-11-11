@@ -13,7 +13,7 @@
 // Signed-in user, body { preview: true, limit?: number }: runs the same steps for
 // that agent right now (the "Get today's messages now" button / first run).
 import {
-  checkHardRequirements, criteriaFromNotesPrompt, DEAL_SEARCHES, DONE_STAGE, factCheckPrompt, firstTouchAt, listingCheckPrompt, loftyListingDetail, loftySearchListings,
+  checkHardRequirements, criteriaFromNotesPrompt, linkLast, DEAL_SEARCHES, DONE_STAGE, factCheckPrompt, firstTouchAt, listingCheckPrompt, loftyListingDetail, loftySearchListings,
   nextTouchAt, NOTES_READER_VERSION, nurtureEligible, nurturePrompt, parseCriteria, parseListingCheck, pickChannel, touchKind,
   type CrmKind, type DealKind, type HomeCard, type LeadFields,
 } from '../_shared/core/index.ts';
@@ -380,7 +380,7 @@ async function findCommunity(orgId: string, f: LeadFields, sent: Set<string>): P
 async function write(prompt: string, s: Pick<Settings, 'org_id' | 'user_id'>, model = MODEL, maxTokens = 400): Promise<{ body: string; subject?: string; why: string }> {
   const parsed = await askModel(prompt, s, model, maxTokens);
   if (!parsed.body) throw new Error('empty draft');
-  return { body: String(parsed.body).trim(), subject: parsed.subject ? String(parsed.subject) : undefined, why: String(parsed.why ?? 'Keeping in touch') };
+  return { body: linkLast(String(parsed.body)), subject: parsed.subject ? String(parsed.subject) : undefined, why: String(parsed.why ?? 'Keeping in touch') };
 }
 
 async function askModel(prompt: string, s: Pick<Settings, 'org_id' | 'user_id'>, model: string, maxTokens: number): Promise<Record<string, unknown>> {
