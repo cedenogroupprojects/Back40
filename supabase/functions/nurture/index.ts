@@ -13,7 +13,8 @@
 // Signed-in user, body { preview: true, limit?: number }: runs the same steps for
 // that agent right now (the "Get today's messages now" button / first run).
 import {
-  criteriaFromNotesPrompt, DEAL_SEARCHES, DONE_STAGE, firstTouchAt, loftySearchListings, nextTouchAt, nurtureEligible, nurturePrompt, parseCriteria, pickChannel, touchKind,
+  checkHardRequirements, criteriaFromNotesPrompt, DEAL_SEARCHES, DONE_STAGE, factCheckPrompt, firstTouchAt, listingCheckPrompt, loftyListingDetail, loftySearchListings,
+  nextTouchAt, NOTES_READER_VERSION, nurtureEligible, nurturePrompt, parseCriteria, parseListingCheck, pickChannel, touchKind,
   type CrmKind, type DealKind, type HomeCard, type LeadFields,
 } from '../_shared/core/index.ts';
 import { credentialsFor, json, preflight, serviceClient, userClient, type Connection } from '../_shared/db.ts';
@@ -21,7 +22,18 @@ import { credentialsFor, json, preflight, serviceClient, userClient, type Connec
 const MODEL = Deno.env.get('AI_MODEL_SMART') ?? 'claude-sonnet-5-5';
 const FAST_MODEL = Deno.env.get('AI_MODEL_FAST') ?? 'claude-haiku-5-5';
 const HOME_OPTIONS = 5;
-const NOTES_PER_RUN = 30;
+const NOTES_PER_RUN = 15;
+const LEADS_PER_RUN = 2; // overnight: a few leads every 15 minutes, so Lofty never sees a burst
+const MAX_DETAIL_LOOKUPS = 10; // per lead
+const LOFTY_GAP_MS = 1100; // space every Lofty call
+
+let lastLofty = 0;
+async function paced<T>(fn: () => Promise<T>): Promise<T> {
+  const wait = lastLofty + LOFTY_GAP_MS - Date.now();
+  if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+  lastLofty = Date.now();
+  return fn();
+}
 const NEVER = '1970-01-01T00:00:00.000Z'; // notesReadAt for 'checked, nothing to read yet'
 const CAN_SEND: Record<string, boolean> = { lofty: true, gohighlevel: true }; // Follow Up Boss can't send through its API
 const db = serviceClient();
@@ -36,7 +48,7 @@ Deno.serve(async (req) => {
   const pre = preflight(req);
   if (pre) return pre;
   if (req.method !== 'POST') return json({ error: 'method' }, 405);
-  const body = (await req.json().catch(() => ({}))) as { preview?: boolean; limit?: number; action?: 'swap'; draftId?: string; homeId?: string };
+  const body = (await req.json().catch(() => ({}))) as { preview?: boolean; limit?: number; action?: 'swap' | 'verify'; draftId?: string; homeId?: string };
 
   // Who's calling: the scheduler, or an agent asking for their batch now.
   const secret = req.headers.get('x-cron-secret');
@@ -72,6 +84,7 @@ Deno.serve(async (req) => {
   const { data: member } = await db.from('members').select('org_id').eq('user_id', me).limit(1).maybeSingle();
   if (!member) return json({ error: 'No team found.' }, 400);
   if (body.action === 'swap') return swapHome(me as string, member.org_id as string, body.draftId ?? '', body.homeId ?? '');
+  if (body.action === 'verify') return verifyDraft(me as string, body.draftId ?? '');
   let { data: s } = await db.from('nurture_settings').select('*').eq('org_id', member.org_id).eq('user_id', me).maybeSingle<Settings>();
   if (!s) {
     const { data: created } = await db.from('nurture_settings').insert({ org_id: member.org_id, user_id: me, enabled: true }).select('*').single<Settings>();
@@ -85,12 +98,19 @@ async function runFor(s: Settings, opts: { force: boolean; limit?: number }) {
   const { data: org } = await db.from('org_settings').select('timezone, quiet_start, quiet_end').eq('org_id', s.org_id).maybeSingle();
   const tz = (org?.timezone as string) ?? 'America/Los_Angeles';
   const local = localParts(tz);
-  if (!opts.force && (local.hour < 6 || s.last_run_on === local.date)) return { ran: false, drafted: 0 };
-
+  // Scheduled runs work overnight (from midnight, local time) a few leads at a time,
+  // until today's limit is written, so everything is waiting when agents wake up.
+  // Nothing is sent overnight: approve mode waits for a tap, auto mode for 9 AM.
+  if (!opts.force && s.last_run_on === local.date) return { ran: false, drafted: 0 };
   if (!planAllows(s)) return { ran: false, drafted: 0 };
   await enroll(s);
-  const drafted = await draftDue(s, opts.limit ?? s.daily_limit, tz, org?.quiet_end as string | undefined);
-  await db.from('nurture_settings').update({ last_run_on: local.date, updated_at: new Date().toISOString() }).eq('org_id', s.org_id).eq('user_id', s.user_id);
+  const since = startOfLocalDay(tz);
+  const { count } = await db.from('drafts').select('id', { count: 'exact', head: true }).eq('user_id', s.user_id).eq('play', 'nurture').gte('created_at', since);
+  const left = Math.max(0, s.daily_limit - (count ?? 0));
+  const batch = opts.force ? (opts.limit ?? s.daily_limit) : Math.min(LEADS_PER_RUN, left);
+  const drafted = batch > 0 ? await draftDue(s, batch, tz, org?.quiet_end as string | undefined) : 0;
+  const finished = !opts.force && (left - drafted <= 0 || drafted === 0);
+  if (finished) await db.from('nurture_settings').update({ last_run_on: local.date, updated_at: new Date().toISOString() }).eq('org_id', s.org_id).eq('user_id', s.user_id);
   return { ran: true, drafted };
 }
 
@@ -172,7 +192,7 @@ async function draftDue(s: Settings, limit: number, tz: string, quietEnd?: strin
 
     // Find something worth sending: up to 5 coming-soon / new / price-drop homes.
     const sent = new Set((st.sent_home_ids as string[]) ?? []);
-    const options = await findListings(lead, fields, sent, credsCache);
+    const options = await findListings(lead, fields, sent, credsCache, s);
     const listing = options[0] ?? null;
     const community = await findCommunity(s.org_id, fields, sent);
     const touch = touchKind(fields, st.step as number, { home: !!listing, community: !!community });
@@ -183,6 +203,19 @@ async function draftDue(s: Settings, limit: number, tz: string, quietEnd?: strin
     let msg: { body: string; subject?: string; why: string };
     try {
       msg = await write(prompt, s);
+      // Double-check: nothing about the home that the listing doesn't say.
+      if (home?.kind === 'listing') {
+        const check = await askModel(factCheckPrompt(msg.body, home), s, FAST_MODEL, 150).catch(() => ({ ok: true }) as Record<string, unknown>);
+        if (check.ok === false) {
+          msg = await write(`${prompt}\n\nIMPORTANT: a previous draft wrongly said "${String(check.problem ?? '').slice(0, 160)}". Mention only the listed numbers and verified MLS phrases.`, s);
+          const again = await askModel(factCheckPrompt(msg.body, home), s, FAST_MODEL, 150).catch(() => ({ ok: true }) as Record<string, unknown>);
+          if (again.ok === false) {
+            console.error('fact check failed twice; skipping lead today', leadId);
+            await later(1);
+            continue;
+          }
+        }
+      }
     } catch (e) {
       console.error('nurture write failed', String(e).slice(0, 200));
       if (String(e).includes('no_ai_key') || String(e).includes('daily_cap')) break;
@@ -207,11 +240,17 @@ async function draftDue(s: Settings, limit: number, tz: string, quietEnd?: strin
 }
 
 /**
- * Up to 5 homes from the agent's own MLS access that fit the lead, and are worth
+ * Up to 5 homes from the agent's own MLS access that fit the lead and are worth
  * a text today: coming soon, just listed (7 days), or price just dropped.
- * Mixed so the agent sees a bit of each; never a home this lead already got.
+ *
+ * Two steps, so a home is never sent unless it truly fits:
+ *  1. Lofty's search narrows by what it filters reliably: cities, price, beds,
+ *     baths, square feet, lot size, single story.
+ *  2. Each remaining home's full MLS record is checked against the must-haves:
+ *     HOA, garage, year built and lot size from its numbers; features like a
+ *     pool or an ADU from the listing's own words. Can't confirm it? It's out.
  */
-async function findListings(lead: LeadRow, f: LeadFields, sent: Set<string>, cache: Map<string, unknown>): Promise<HomeCard[]> {
+async function findListings(lead: LeadRow, f: LeadFields, sent: Set<string>, cache: Map<string, unknown>, s: Pick<Settings, 'org_id' | 'user_id'>): Promise<HomeCard[]> {
   if (lead.crm !== 'lofty' || !lead.connection_id || !(f.areas?.length || f.budgetMax)) return [];
   if (!cache.has(lead.connection_id)) {
     const { data: conn } = await db.from('crm_connections').select('*').eq('id', lead.connection_id).maybeSingle<Connection>();
@@ -219,29 +258,69 @@ async function findListings(lead: LeadRow, f: LeadFields, sent: Set<string>, cac
   }
   const creds = cache.get(lead.connection_id) as Awaited<ReturnType<typeof credentialsFor>> | null;
   if (!creds) return [];
-  const q = { cities: f.areas, priceMin: f.budgetMin, priceMax: f.budgetMax, bedsMin: f.bedsMin };
+  const q = { cities: f.areas, priceMin: f.budgetMin, priceMax: f.budgetMax, bedsMin: f.bedsMin, bathsMin: f.bathsMin, sqftMin: f.sqftMin, lotMinSqft: f.lotMinSqft, singleStory: f.singleStory };
   const kinds = Object.keys(DEAL_SEARCHES) as DealKind[];
-  const lists = await Promise.all(
-    kinds.map((k) =>
-      loftySearchListings(creds, q, 8, DEAL_SEARCHES[k] as Record<string, unknown>)
-        .then((rows) => (rows ?? []).map((r) => toListingCard(r, k)).filter((c): c is HomeCard => !!c && !sent.has(c.id)))
-        .catch((e) => {
-          console.error('listing search failed', k, String(e).slice(0, 200));
-          return [] as HomeCard[];
-        }),
-    ),
-  );
+  const lists: HomeCard[][] = [];
+  for (const k of kinds) {
+    const rows = await paced(() => loftySearchListings(creds, q, 10, DEAL_SEARCHES[k] as Record<string, unknown>)).catch((e) => {
+      console.error('listing search failed', k, String(e).slice(0, 200));
+      return [] as Record<string, unknown>[];
+    });
+    lists.push(
+      (rows ?? [])
+        .map((r) => toListingCard(r, k))
+        .filter((c): c is HomeCard => !!c && !sent.has(c.id))
+        // Quick checks on the search row itself before spending a lookup.
+        .filter((c) => !(f.yearBuiltMin && c.yearBuilt && c.yearBuilt < f.yearBuiltMin) && !(f.lotMinSqft && c.lotSqft && c.lotSqft < f.lotMinSqft)),
+    );
+  }
   // Round-robin: coming soon, new, price drop, coming soon, ...
-  const out: HomeCard[] = [];
+  const candidates: HomeCard[] = [];
   const seen = new Set<string>();
-  for (let i = 0; out.length < HOME_OPTIONS && lists.some((l) => l.length > i); i++) {
+  for (let i = 0; lists.some((l) => l.length > i); i++) {
     for (const l of lists) {
       const c = l[i];
-      if (c && !seen.has(c.id) && out.length < HOME_OPTIONS) {
+      if (c && !seen.has(c.id)) {
         seen.add(c.id);
-        out.push(c);
+        candidates.push(c);
       }
     }
+  }
+
+  const must = f.mustHave ?? [];
+  const needsRecord = must.length > 0 || !!(f.noHoa || f.garageMin || f.yearBuiltMin || f.lotMinSqft);
+  const wants = [...must, ...(f.niceToHave ?? [])];
+  const out: HomeCard[] = [];
+  let lookups = 0;
+  for (const c of candidates) {
+    if (out.length >= HOME_OPTIONS) break;
+    // Without hard requirements, only the top homes need their record (photos, quotable facts).
+    if (!needsRecord && out.length >= 2) {
+      out.push(c);
+      continue;
+    }
+    if (!c.listingId || lookups >= MAX_DETAIL_LOOKUPS) {
+      if (!needsRecord) out.push(c);
+      continue;
+    }
+    lookups++;
+    const d = await paced(() => loftyListingDetail(creds, c.listingId!)).catch(() => null);
+    if (!d) {
+      if (!needsRecord) out.push(c);
+      continue;
+    }
+    if (d.status && !/^(active|coming soon)$/i.test(d.status)) continue;
+    const hard = checkHardRequirements(f, d);
+    if (hard) continue;
+    const text = `${d.description} ${d.interiorFeatures} ${d.exterior}`;
+    let facts: string[] = [];
+    if (text.trim().length > 20) {
+      const raw = await askModel(listingCheckPrompt(d, must, wants), s, FAST_MODEL, 300).catch(() => null);
+      const res = parseListingCheck(raw, must, text);
+      if (!res.ok) continue; // a must-have isn't clearly in the listing
+      facts = res.facts;
+    } else if (must.length) continue;
+    out.push({ ...c, photos: d.photos.slice(0, 12), photo: c.photo ?? d.photos[0], hoaFee: d.hoaFee ?? undefined, garage: d.garage ?? undefined, yearBuilt: d.yearBuilt ?? c.yearBuilt, lotSqft: d.lotSqft ?? c.lotSqft, facts });
   }
   return out;
 }
@@ -269,7 +348,10 @@ function toListingCard(r: Record<string, unknown>, badge?: DealKind): HomeCard |
     url: typeof url === 'string' ? url : undefined,
     photo: typeof photo === 'string' ? photo : undefined,
     badge: /coming soon/i.test(status) ? 'coming_soon' : badge,
-    sqft: Number(r.sqft) || undefined,
+    listingId: r.id != null ? String(r.id) : undefined,
+    lotSqft: Number(r.lotSize) > 0 ? Number(r.lotSize) : undefined,
+    yearBuilt: Number(r.builtYear) > 0 ? Number(r.builtYear) : undefined,
+    sqft: Number(r.sqft) > 0 ? Number(r.sqft) : undefined,
     daysOnMarket: r.daysOnList != null ? Number(r.daysOnList) : undefined,
   };
 }
@@ -344,19 +426,18 @@ async function promptFor(lead: LeadRow, fields: LeadFields, o: { agentName: stri
  */
 async function criteriaFromNotes(lead: LeadRow, fields: LeadFields, s: Pick<Settings, 'org_id' | 'user_id'>): Promise<LeadFields> {
   const mark = async () => {
-    if (fields.notesReadAt) return fields;
-    const next = { ...fields, notesReadAt: NEVER };
+    if (fields.notesReadAt && fields.notesReadV === NOTES_READER_VERSION) return fields;
+    const next = { ...fields, notesReadAt: fields.notesReadAt ?? NEVER, notesReadV: NOTES_READER_VERSION };
     await db.from('leads').update({ fields: next }).eq('id', lead.id);
     return next;
   };
-  if (fields.areas?.length && fields.budgetMax && fields.bedsMin) return mark();
   const { data: notes } = await db.from('timeline_items').select('at, body').eq('lead_id', lead.id).eq('kind', 'note').order('at', { ascending: false }).limit(12);
   const latest = notes?.[0]?.at ? new Date(notes[0].at as string).toISOString() : undefined;
   if (!latest) return mark();
-  if (fields.notesReadAt && fields.notesReadAt >= latest) return fields;
+  if (fields.notesReadAt && fields.notesReadAt >= latest && fields.notesReadV === NOTES_READER_VERSION) return fields;
   let found: ReturnType<typeof parseCriteria> = {};
   try {
-    found = parseCriteria(await askModel(criteriaFromNotesPrompt(notes!.map((n) => String(n.body ?? ''))), s, FAST_MODEL, 200));
+    found = parseCriteria(await askModel(criteriaFromNotesPrompt(notes!.map((n) => String(n.body ?? ''))), s, FAST_MODEL, 400));
   } catch (e) {
     console.error('notes read failed', String(e).slice(0, 200));
     return fields;
@@ -367,7 +448,18 @@ async function criteriaFromNotes(lead: LeadRow, fields: LeadFields, s: Pick<Sett
     budgetMin: fields.budgetMin ?? (fields.budgetMax ? undefined : found.budgetMin),
     budgetMax: fields.budgetMax ?? found.budgetMax,
     bedsMin: fields.bedsMin ?? found.bedsMin,
+    // From the notes only (the CRM has no field for these). A fresh read replaces the old one.
+    bathsMin: found.bathsMin,
+    sqftMin: found.sqftMin,
+    lotMinSqft: found.lotMinSqft,
+    singleStory: found.singleStory,
+    yearBuiltMin: found.yearBuiltMin,
+    garageMin: found.garageMin,
+    noHoa: found.noHoa,
+    mustHave: found.mustHave,
+    niceToHave: found.niceToHave,
     notesReadAt: latest,
+    notesReadV: NOTES_READER_VERSION,
   };
   await db.from('leads').update({ fields: next }).eq('id', lead.id);
   return next;
@@ -380,13 +472,34 @@ async function readPendingNotes(s: Settings, max: number) {
     .select('*')
     .eq('org_id', s.org_id)
     .eq('assigned_user_id', s.user_id)
-    .is('fields->>notesReadAt', null)
+    .or(`fields->>notesReadV.is.null,fields->>notesReadV.neq.${NOTES_READER_VERSION}`)
     .order('updated_at', { ascending: false })
     .limit(max);
   for (const lead of (rows ?? []) as LeadRow[]) {
     if (DONE_STAGE.test(lead.stage)) continue;
     await criteriaFromNotes(lead, (lead.fields ?? {}) as LeadFields, s);
   }
+}
+
+/** Right before a message goes out: is the home still on the market? */
+async function homeStillAvailable(leadId: string, home: HomeCard | null): Promise<{ ok: boolean; status?: string }> {
+  if (!home || home.kind !== 'listing' || !home.listingId) return { ok: true };
+  const { data: lead } = await db.from('leads').select('connection_id').eq('id', leadId).maybeSingle();
+  if (!lead?.connection_id) return { ok: true };
+  const { data: conn } = await db.from('crm_connections').select('*').eq('id', lead.connection_id).maybeSingle<Connection>();
+  const creds = conn ? await credentialsFor(db, conn).catch(() => null) : null;
+  if (!creds) return { ok: true };
+  const d = await paced(() => loftyListingDetail(creds, home.listingId!)).catch(() => undefined);
+  if (d === undefined) return { ok: true }; // Lofty hiccup: don't block the agent
+  if (!d) return { ok: false, status: 'off the market' };
+  return /^(active|coming soon)$/i.test(d.status) ? { ok: true } : { ok: false, status: d.status.toLowerCase() || 'off the market' };
+}
+
+async function verifyDraft(me: string, draftId: string) {
+  const { data: d } = await db.from('drafts').select('id, lead_id, home').eq('id', draftId).eq('user_id', me).maybeSingle();
+  if (!d) return json({ ok: true });
+  const r = await homeStillAvailable(d.lead_id as string, d.home as HomeCard | null);
+  return json(r.ok ? { ok: true } : { ok: false, error: `This home just went ${r.status}. Pick a different home before sending.` });
 }
 
 /** The agent picked a different home from the 5 options: rewrite the message around it. */
@@ -422,7 +535,7 @@ async function swapHome(me: string, orgId: string, draftId: string, homeId: stri
 async function sendDueAuto() {
   const { data: rows } = await db
     .from('drafts')
-    .select('id, org_id, lead_id, user_id, channel, subject, body')
+    .select('id, org_id, lead_id, user_id, channel, subject, body, home')
     .eq('play', 'nurture')
     .eq('status', 'pending')
     .not('send_after', 'is', null)
@@ -431,6 +544,12 @@ async function sendDueAuto() {
   for (const d of rows ?? []) {
     const { data: lead } = await db.from('leads').select('id, org_id, connection_id, crm, crm_lead_id').eq('id', d.lead_id).maybeSingle();
     if (!lead?.connection_id || !CAN_SEND[lead.crm as string]) continue;
+    const avail = await homeStillAvailable(lead.id as string, (d as { home?: HomeCard | null }).home ?? null);
+    if (!avail.ok) {
+      // Don't send a home that just went pending: hand it back to the agent.
+      await db.from('drafts').update({ send_after: null, why: `Held: the home went ${avail.status}. Pick another.` }).eq('id', d.id);
+      continue;
+    }
     const now = new Date().toISOString();
     await db.from('sync_outbox').upsert(
       {
@@ -448,6 +567,13 @@ async function sendDueAuto() {
 }
 
 // ── time helpers ──
+/** ISO time of the most recent local midnight in a time zone. */
+function startOfLocalDay(tz: string, at = new Date()) {
+  const p = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).formatToParts(at).map((x) => [x.type, x.value]));
+  const secs = (Number(p.hour) % 24) * 3600 + Number(p.minute) * 60 + Number(p.second);
+  return new Date(at.getTime() - secs * 1000).toISOString();
+}
+
 function localParts(tz: string, at = new Date()) {
   const parts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', hour12: false }).formatToParts(at).map((p) => [p.type, p.value]));
   return { date: `${parts.year}-${parts.month}-${parts.day}`, hour: Number(parts.hour) % 24 };

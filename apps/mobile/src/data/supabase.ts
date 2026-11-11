@@ -197,6 +197,9 @@ export async function saveNurture(orgId: string, userId: string, s: NurtureSetti
 /** Write today's messages now instead of waiting for the morning run. */
 export const runNurtureNow = (limit?: number) => fn<{ ok: boolean; drafted: number }>('nurture', { preview: true, limit });
 
+/** Is this message's home still on the market? Checked right before sending. */
+export const verifyDraft = (draftId: string) => fn<{ ok: boolean; error?: string }>('nurture', { action: 'verify', draftId });
+
 /** Rewrite a nurture message around a different home from its options. */
 export async function swapHome(draftId: string, homeId: string) {
   const r = await fn<{ ok: boolean; draft: { body: string; subject: string | null; why: string; home: Draft['home'] } }>('nurture', { action: 'swap', draftId, homeId });

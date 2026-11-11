@@ -156,10 +156,34 @@ export function FollowUpQueue({ inTab = false }: { inTab?: boolean }) {
       setBusy(false);
     }
   };
-  const sendAll = () => {
+  // Right before anything goes out, make sure its home is still on the market.
+  const [held, setHeld] = useState<Record<string, string>>({});
+  const stillAvailable = async (id: string, hasListing: boolean) => {
+    if (!isLiveMode || !hasListing) return true;
+    const r = await live.verifyDraft(id).catch(() => ({ ok: true as const }));
+    if (r.ok) return true;
+    setHeld((h) => ({ ...h, [id]: r.error ?? 'This home is no longer available. Pick a different home.' }));
+    return false;
+  };
+  const [sending, setSending] = useState(false);
+  const sendOne = async (id: string, edited?: string) => {
+    const x = pending.find((p) => p.id === id);
+    if (!x) return;
+    setSending(true);
+    const ok = await stillAvailable(id, x.home?.kind === 'listing');
+    setSending(false);
+    if (!ok) return;
+    decideDraft(id, 'sent', edited);
+    setEditing(false);
+  };
+  const sendAll = async () => {
     if (!confirmAll) return setConfirmAll(true);
-    for (const x of pending) decideDraft(x.id, 'sent');
     setConfirmAll(false);
+    setSending(true);
+    for (const x of pending) {
+      if (await stillAvailable(x.id, x.home?.kind === 'listing')) decideDraft(x.id, 'sent');
+    }
+    setSending(false);
   };
 
   return (
@@ -231,7 +255,12 @@ export function FollowUpQueue({ inTab = false }: { inTab?: boolean }) {
               </View>
             )}
             {d.home ? <Home h={d.home} /> : null}
-            {d.homeOptions?.length ? <HomePicker key={d.id} options={d.homeOptions} current={d.home?.id} onPick={(id) => swapHome(d.id, id)} /> : null}
+            {held[d.id] ? (
+              <T w="semibold" size={14} tone="accent">
+                {held[d.id]}
+              </T>
+            ) : null}
+            {d.homeOptions?.length ? <HomePicker key={d.id} options={d.homeOptions} current={d.home?.id} onPick={(id) => swapHome(d.id, id).then(() => setHeld((h) => { const n = { ...h }; delete n[d.id]; return n; }))} /> : null}
             <T size={13} tone="sub">
               <T w="semibold" size={13} tone="sub">
                 Why:{' '}
@@ -241,7 +270,7 @@ export function FollowUpQueue({ inTab = false }: { inTab?: boolean }) {
             <Row>
               <Pill label="Skip" kind="soft" onPress={() => { setEditing(false); decideDraft(d.id, 'skipped'); }} style={{ flex: 1 }} />
               <Pill label={editing ? 'Done' : 'Edit'} kind="soft" onPress={() => { if (!editing) setBody(d.body); setEditing((v) => !v); }} style={{ flex: 1 }} />
-              <Pill label="Send" icon="send" onPress={() => { decideDraft(d.id, 'sent', editing ? body : undefined); setEditing(false); }} style={{ flex: 2 }} />
+              <Pill label={sending ? 'Checking…' : 'Send'} icon="send" disabled={sending} onPress={() => void sendOne(d.id, editing ? body : undefined)} style={{ flex: 2 }} />
             </Row>
           </Card>
           {pending.length > 1 ? (

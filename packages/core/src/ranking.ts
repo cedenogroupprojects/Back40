@@ -154,10 +154,13 @@ export function hotAndWarm(leads: Lead[], rules: HotRules = DEFAULT_RULES, now =
 export function rankToday(leads: Lead[], rules: HotRules = DEFAULT_RULES, now = Date.now(), extra = 0): RankedLead[] {
   const ranked = rankEligible(leads, rules, now);
 
+  // Add, never take: brand-new leads and anyone who just engaged (replied, opened
+  // a home, watched a video in the last day) always get a card, even past the cap.
+  const engaged = (r: RankedLead) => r.label === 'brand_new' || recentSignals(r.lead, now, 24) > 0;
   const brandNew = ranked
-    .filter((r) => r.label === 'brand_new')
-    .sort((a, b) => t(b.lead.createdAt) - t(a.lead.createdAt));
-  const rest = ranked.filter((r) => r.label !== 'brand_new').sort((a, b) => b.heat - a.heat);
+    .filter(engaged)
+    .sort((a, b) => Number(b.label === 'brand_new') - Number(a.label === 'brand_new') || t(b.lead.createdAt) - t(a.lead.createdAt));
+  const rest = ranked.filter((r) => !engaged(r)).sort((a, b) => b.heat - a.heat);
 
   // Brand-new and pinned leads are guaranteed a spot; others fill up to the cap.
   const cap = rules.cap + extra;

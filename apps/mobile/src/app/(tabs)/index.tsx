@@ -33,12 +33,20 @@ export default function Today() {
   const { today, leads, drafts, streak, callsToday, isLiveMode, status, profile, moreToday, dealsFor } = useStore();
   const needsCrm = isLiveMode && status === 'ready' && !profile?.crm;
 
-  // The deck holds still while you work it: new leads join the end, nobody jumps around.
+  // Add, never take: the deck holds still while you work it. Once the day has
+  // started, anyone new (a fresh lead, someone who replied or opened a home)
+  // becomes your very next card and the count grows; nobody gets bumped.
   const [deckIds, setDeckIds] = useState<string[]>([]);
+  const [i, setI] = useState(0);
+  const iRef = useRef(0);
+  iRef.current = i;
   useEffect(() => {
     setDeckIds((ids) => {
       const add = today.map((r) => r.lead.id).filter((id) => !ids.includes(id));
-      return add.length ? [...ids, ...add] : ids;
+      if (!add.length) return ids;
+      if (!ids.length) return add;
+      const at = Math.min(ids.length, iRef.current + 1);
+      return [...ids.slice(0, at), ...add, ...ids.slice(at)];
     });
   }, [today]);
   const byId = useMemo(() => new Map(today.map((r) => [r.lead.id, r])), [today]);
@@ -47,7 +55,6 @@ export default function Today() {
     .map((id) => byId.get(id) ?? (leadById.get(id) ? ({ lead: leadById.get(id)!, label: 'working', heat: 0, reason: 'Worked today.' } as RankedLead) : null))
     .filter((x): x is RankedLead => !!x);
 
-  const [i, setI] = useState(0);
   const total = deck.length;
   const done = total > 0 && i >= total;
   const cur = deck[Math.min(i, Math.max(0, total - 1))];

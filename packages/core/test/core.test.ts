@@ -32,11 +32,16 @@ test('brand-new uncontacted leads always lead the list, newest first', () => {
 });
 
 test('list is capped at 10, but pins always make it', () => {
-  const many = Array.from({ length: 14 }, (_, i) => lead({ id: `h${i}`, stage: 'Actively Looking', signals: [{ kind: 'site_visit', at: hoursAgo(i + 1) }] }));
+  const many = Array.from({ length: 14 }, (_, i) => lead({ id: `h${i}`, stage: 'Actively Looking', signals: [{ kind: 'site_visit', at: hoursAgo(25 + i) }] }));
   const pinned = lead({ id: 'pin', pinned: true });
   const list = rankToday([...many, pinned], DEFAULT_RULES, NOW);
   assert.ok(list.some((r) => r.lead.id === 'pin'));
   assert.ok(list.length <= 11);
+});
+
+test('add, never take: anyone who engaged today gets a card past the cap', () => {
+  const busy = Array.from({ length: 12 }, (_, i) => lead({ id: `e${i}`, stage: 'Actively Looking', signals: [{ kind: 'site_visit', at: hoursAgo(i + 1) }] }));
+  assert.equal(rankToday(busy, DEFAULT_RULES, NOW).length, 12);
 });
 
 test('hot lead untouched 2+ days is "slipping"; same rule for everyone', () => {

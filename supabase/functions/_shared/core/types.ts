@@ -86,6 +86,20 @@ export interface LeadFields {
   textConsent?: boolean;
   /** When Back 40 last read the agent's notes for area/budget/beds (notes newer than this get re-read). */
   notesReadAt?: string;
+  /** Which version of the notes reader filled these (older versions get re-read). */
+  notesReadV?: number;
+  /** Must-haves from the agent's notes. A home that fails one is never sent. */
+  bathsMin?: number;
+  sqftMin?: number;
+  lotMinSqft?: number;
+  singleStory?: boolean;
+  yearBuiltMin?: number;
+  garageMin?: number;
+  noHoa?: boolean;
+  /** Features that must be in the MLS listing itself, e.g. "pool", "ADU", "RV parking". */
+  mustHave?: string[];
+  /** Nice-to-haves: rank homes higher, never rule one out. */
+  niceToHave?: string[];
 }
 
 export interface HotRules {
@@ -123,6 +137,8 @@ export interface Draft {
   status: 'pending' | 'sent' | 'skipped';
   /** The home or new-build community this message features (nurture). */
   home?: import('./nurture.ts').HomeCard | null;
+  /** Up to 5 homes the agent can swap in (coming soon / new / price drop). */
+  homeOptions?: import('./nurture.ts').HomeCard[] | null;
 }
 
 export interface Agent {

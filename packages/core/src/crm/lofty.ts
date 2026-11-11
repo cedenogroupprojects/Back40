@@ -215,7 +215,54 @@ export const lofty: CrmAdapter = {
 // ── Listings (for nurture home matching) ──
 // POST /v2.0/listings/search (needs the key/app to have Listings → View).
 // The response shape isn't documented field-by-field, so this reads it defensively.
-export type ListingCriteria = { cities?: string[]; priceMin?: number; priceMax?: number; bedsMin?: number };
+export type ListingCriteria = { cities?: string[]; priceMin?: number; priceMax?: number; bedsMin?: number; bathsMin?: number; sqftMin?: number; lotMinSqft?: number; singleStory?: boolean };
+
+/** One listing's full MLS record (GET /v1.0/listing?listingId=, verified live Nov 11). */
+export type ListingDetail = {
+  listingId: string;
+  status: string;
+  description: string;
+  interiorFeatures: string;
+  exterior: string;
+  hoaFee: number | null; // null = not reported
+  garage: number | null;
+  yearBuilt: number | null;
+  lotSqft: number | null;
+  photos: string[];
+};
+
+export async function loftyListingDetail(c: CrmCredentials, listingId: string): Promise<ListingDetail | null> {
+  const res = await fetch(`${BASE}/v1.0/listing?listingId=${encodeURIComponent(listingId)}`, { headers: headers(c) });
+  if (res.status === 401 || res.status === 403 || res.status === 404) return null;
+  if (!res.ok) throw new Error(`lofty listing ${res.status}`);
+  const body = (await res.json()) as { listIng?: Record<string, unknown>[] };
+  const r = body?.listIng?.[0];
+  if (!r) return null;
+  const num = (v: unknown) => (v === null || v === undefined || v === '' || Number(v) < 0 || Number.isNaN(Number(v)) ? null : Number(v));
+  let photos: string[] = [];
+  const pl = r.pictureList;
+  if (Array.isArray(pl)) photos = pl.filter((x): x is string => typeof x === 'string');
+  else if (typeof pl === 'string') {
+    try {
+      const parsed = JSON.parse(pl);
+      if (Array.isArray(parsed)) photos = parsed.filter((x): x is string => typeof x === 'string');
+    } catch {
+      /* not JSON */
+    }
+  }
+  return {
+    listingId: String(r.listingId ?? listingId),
+    status: String(r.listingStatus ?? ''),
+    description: String(r.detailsDescribe ?? ''),
+    interiorFeatures: String(r.interiorFeatures ?? ''),
+    exterior: String(r.exterior ?? ''),
+    hoaFee: num(r.hoaFee),
+    garage: num(r.garageParkingSpaces),
+    yearBuilt: num(r.builtYear),
+    lotSqft: num(r.totalAvailableAcres),
+    photos,
+  };
+}
 
 /**
  * The three "get it before everyone else" searches. Filters verified live
@@ -233,6 +280,11 @@ export async function loftySearchListings(c: CrmCredentials, q: ListingCriteria,
   if (q.cities?.length) filterConditions.location = { city: q.cities };
   if (q.priceMax) filterConditions.price = `${q.priceMin ?? ''},${q.priceMax}`;
   if (q.bedsMin) filterConditions.beds = `${q.bedsMin},`;
+  // Verified live Nov 11: these narrow the search. (builtYear, pool, garage and HOA are ignored, so those are checked per listing.)
+  if (q.bathsMin) filterConditions.baths = `${q.bathsMin},`;
+  if (q.sqftMin) filterConditions.sqft = `${q.sqftMin},`;
+  if (q.lotMinSqft) filterConditions.lotSize = `${q.lotMinSqft},`;
+  if (q.singleStory) filterConditions.stories = '1,1';
   const res = await fetch(`${BASE}/v2.0/listings/search`, {
     method: 'POST',
     headers: headers(c),
