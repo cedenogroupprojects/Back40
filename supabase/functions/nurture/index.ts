@@ -150,7 +150,7 @@ async function draftDue(s: Settings, limit: number, tz: string, quietEnd?: strin
     .eq('status', 'active')
     .lte('next_at', nowIso)
     .order('next_at')
-    .limit(limit * 3);
+    .limit(Math.max(limit * 3, 60));
   if (!due?.length) return 0;
 
   // Don't stack messages: skip leads that already have one waiting.
@@ -388,7 +388,10 @@ async function askModel(prompt: string, s: Pick<Settings, 'org_id' | 'user_id'>,
   if (!key) throw new Error('no_ai_key');
   const day = new Date().toISOString().slice(0, 10);
   const { data: usage } = await db.from('ai_usage').select('calls, input_tokens, output_tokens').eq('user_id', s.user_id).eq('day', day).maybeSingle();
-  if ((usage?.calls ?? 0) >= Number(Deno.env.get('AI_DAILY_CALLS_PER_USER') ?? 300)) throw new Error('daily_cap');
+  // The daily cap is for message writing. Quick reads (notes, listing checks) run on the
+  // small model, cost a fraction, and are counted in tokens only, so they never block messages.
+  const quick = model === FAST_MODEL;
+  if (!quick && (usage?.calls ?? 0) >= Number(Deno.env.get('AI_DAILY_CALLS_PER_USER') ?? 300)) throw new Error('daily_cap');
 
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -400,7 +403,7 @@ async function askModel(prompt: string, s: Pick<Settings, 'org_id' | 'user_id'>,
   await db.from('ai_usage').upsert(
     {
       org_id: s.org_id, user_id: s.user_id, day,
-      calls: (usage?.calls ?? 0) + 1,
+      calls: (usage?.calls ?? 0) + (quick ? 0 : 1),
       input_tokens: Number(usage?.input_tokens ?? 0) + (out.usage?.input_tokens ?? 0),
       output_tokens: Number(usage?.output_tokens ?? 0) + (out.usage?.output_tokens ?? 0),
     },
