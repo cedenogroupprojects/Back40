@@ -14,13 +14,20 @@ import { font } from '@/theme/tokens';
 
 export const TAB_BAR_HEIGHT = 50;
 
-const TabButton = forwardRef<ComponentRef<typeof Pressable>, TabTriggerSlotProps & { icon: IconName; label: string }>(function TabButton({ isFocused, icon, label, ...props }, ref) {
+const TabButton = forwardRef<ComponentRef<typeof Pressable>, TabTriggerSlotProps & { icon: IconName; label: string; badge?: number }>(function TabButton({ isFocused, icon, label, badge, ...props }, ref) {
   const { c } = useTheme();
   const color = isFocused ? c.navOnIcon : c.navOff;
   return (
-    <Pressable ref={ref} {...props} accessibilityRole="tab" accessibilityLabel={label} accessibilityState={{ selected: isFocused }} style={{ flex: 1 }}>
+    <Pressable ref={ref} {...props} accessibilityRole="tab" accessibilityLabel={badge ? `${label}, ${badge} waiting` : label} accessibilityState={{ selected: isFocused }} style={{ flex: 1 }}>
       <View style={{ height: TAB_BAR_HEIGHT, alignItems: 'center', justifyContent: 'center', gap: 2 }}>
-        <Icon name={icon} size={23} color={color} width={isFocused ? 2.1 : 1.8} />
+        <View>
+          <Icon name={icon} size={23} color={color} width={isFocused ? 2.1 : 1.8} />
+          {badge ? (
+            <View style={{ position: 'absolute', top: -4, right: -10, minWidth: 18, height: 18, borderRadius: 9, paddingHorizontal: 5, backgroundColor: c.accent, alignItems: 'center', justifyContent: 'center' }}>
+              <Text style={[font('bold'), { fontSize: 11, color: '#FFFFFF' }]}>{badge > 99 ? '99+' : badge}</Text>
+            </View>
+          ) : null}
+        </View>
         <Text style={[font('medium'), { fontSize: 10, color }]}>{label}</Text>
       </View>
     </Pressable>
@@ -30,7 +37,8 @@ const TabButton = forwardRef<ComponentRef<typeof Pressable>, TabTriggerSlotProps
 export default function TabLayout() {
   const { c } = useTheme();
   const insets = useSafeAreaInsets();
-  const { status } = useStore();
+  const { status, drafts } = useStore();
+  const pending = drafts.filter((d) => d.status === 'pending').length;
   if (status === 'loading')
     return (
       <View style={{ flex: 1, backgroundColor: c.bg, alignItems: 'center', justifyContent: 'center' }}>
@@ -45,6 +53,9 @@ export default function TabLayout() {
       <TabList style={{ position: 'absolute', left: 0, right: 0, bottom: 0, paddingBottom: Math.max(insets.bottom, 6), flexDirection: 'row', backgroundColor: c.nav, borderTopWidth: HAIRLINE, borderTopColor: c.sep }}>
         <TabTrigger name="index" href="/" asChild>
           <TabButton icon="today" label="Today" />
+        </TabTrigger>
+        <TabTrigger name="followup" href="/followup" asChild>
+          <TabButton icon="chat" label="Follow up" badge={pending} />
         </TabTrigger>
         <TabTrigger name="leads" href="/leads" asChild>
           <TabButton icon="leads" label="Hot & warm" />
