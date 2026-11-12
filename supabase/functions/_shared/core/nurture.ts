@@ -38,18 +38,38 @@ export function nurtureEligible(lead: Pick<Lead, 'createdAt' | 'lastContactAt' |
 }
 
 /** What kind of message this touch should be. */
-export type Touch = 'home' | 'community' | 'discovery';
+/**
+ * What a message is built around:
+ *  home      — a listing that fits what the lead told us
+ *  teaser    — we don't know what they want yet, so a hot home from the agent's usual
+ *              market is the hook, and the question finds out if that's their area/price
+ *  community — a new-build community
+ *  offer     — a program or incentive the agent added (closing costs paid, rate buydown…)
+ *  discovery — nothing to share: a sharp question that's easy to answer
+ */
+export type Touch = 'home' | 'teaser' | 'community' | 'offer' | 'discovery';
+
+/** Something the agent wants to tell leads about, written by the agent. */
+export type Offer = { text: string; url?: string };
 
 /**
  * Know what they want → show them a home. Don't know yet → ask one easy question
  * (the answer unlocks matched homes). Every third touch is a new-build community
  * when one fits, so new construction stays in front of them.
  */
-export function touchKind(fields: LeadFields, step: number, has: { home: boolean; community: boolean }): Touch {
+export function touchKind(fields: LeadFields, step: number, has: { home: boolean; community: boolean; offer?: boolean }): Touch {
   const knowsWhat = !!(fields.areas?.length || fields.budgetMax);
-  if (has.community && (step % 3 === 2 || (!has.home && knowsWhat))) return 'community';
-  if (has.home && knowsWhat) return 'home';
-  if (has.community && step > 0 && step % 2 === 1) return 'community';
+  if (knowsWhat) {
+    if (has.community && (step % 3 === 2 || !has.home)) return 'community';
+    if (has.offer && step % 3 === 1 && !has.home) return 'offer';
+    if (has.home) return 'home';
+    if (has.offer) return 'offer';
+    return 'discovery';
+  }
+  // Nothing on file about what they want: lead with something worth reading anyway.
+  if (has.offer && (step % 2 === 1 || !has.home)) return 'offer';
+  if (has.home) return 'teaser';
+  if (has.community) return 'community';
   return 'discovery';
 }
 
@@ -105,6 +125,7 @@ export type DraftContext = {
   };
   history: string[]; // newest first, short lines
   voice?: string; // learned style notes, if any
+  offer?: Offer | null;
 };
 
 /** A first name we can greet someone by, or null when the CRM has a handle like "rlpmontanez" or "jdog_23". */
@@ -131,38 +152,53 @@ export function nurturePrompt(c: DraftContext): string {
     f.bedsMin ? `Wants ${f.bedsMin}+ beds` : null,
     f.preApproved ? 'Pre-approved: yes' : null,
   ].filter(Boolean);
+  const homeLine = (h: HomeCard) =>
+    `${h.title}${h.city ? `, ${h.city}` : ''}${h.price ? ` — $${h.price.toLocaleString('en-US')}` : ''}${h.beds ? `, ${h.beds} bd` : ''}${h.baths ? `/${h.baths} ba` : ''}${h.sqft ? `, ${h.sqft.toLocaleString('en-US')} sqft` : ''}${h.lotSqft && h.lotSqft >= 7000 ? `, ${h.lotSqft.toLocaleString('en-US')} sqft lot` : ''}${h.facts?.length ? `. VERIFIED FROM THE MLS LISTING (you may mention these, nothing else about the home): ${h.facts.map((x) => `"${x}"`).join('; ')}` : ''}${h.badge ? `. ${{ coming_soon: 'COMING SOON: not on the open market yet', new: `NEW LISTING: on the market ${h.daysOnMarket ?? 'a few'} days`, price_drop: 'PRICE JUST DROPPED' }[h.badge]}` : ''}${h.url ? `. Link: ${h.url}` : ''}`;
   const home = c.home
     ? c.home.kind === 'listing'
-      ? `HOME TO SHARE (real MLS listing): ${c.home.title}${c.home.city ? `, ${c.home.city}` : ''}${c.home.price ? ` — $${c.home.price.toLocaleString('en-US')}` : ''}${c.home.beds ? `, ${c.home.beds} bd` : ''}${c.home.baths ? `/${c.home.baths} ba` : ''}${c.home.sqft ? `, ${c.home.sqft.toLocaleString('en-US')} sqft` : ''}${c.home.lotSqft && c.home.lotSqft >= 7000 ? `, ${c.home.lotSqft.toLocaleString('en-US')} sqft lot` : ''}${c.home.facts?.length ? `. VERIFIED FROM THE MLS LISTING (you may mention these, nothing else about the home): ${c.home.facts.map((x) => `"${x}"`).join('; ')}` : ''}${c.home.badge ? `. ${{ coming_soon: 'COMING SOON: not on the open market yet', new: `NEW LISTING: on the market ${c.home.daysOnMarket ?? 'a few'} days`, price_drop: 'PRICE JUST DROPPED' }[c.home.badge]}` : ''}${c.home.url ? `. Link: ${c.home.url}` : ''}`
+      ? c.touch === 'teaser'
+        ? `HOME TO USE AS THE HOOK (real MLS listing in the area this agent's buyers usually shop; we do NOT know yet if it is this lead's area or price): ${homeLine(c.home)}`
+        : `HOME TO SHARE (real MLS listing that fits them): ${homeLine(c.home)}`
       : `NEW-BUILD COMMUNITY TO SHARE: ${c.home.title}${c.home.subtitle ? ` by ${c.home.subtitle}` : ''} in ${c.home.city}${c.home.priceFrom ? `, from $${c.home.priceFrom.toLocaleString('en-US')}` : ''}${c.home.highlights ? `. ${c.home.highlights}` : ''}${c.home.url ? `. Link: ${c.home.url}` : ''}`
     : null;
-  const goal =
-    c.touch === 'home'
-      ? 'Share the home below because it fits what they told us. Lead with why it is worth their attention right now (coming soon before most buyers see it / just listed / price just dropped), the way an insider would tip off a friend, then why it fits them in a few words. Make them feel they are getting early access, without hype or pressure. End with one easy yes/no question (e.g. want to see it before it gets busy?).'
-      : c.touch === 'community'
-        ? 'Share the new-build community below as something worth a look. Mention one concrete reason. End with one easy question.'
-        : `We do not know enough yet to send homes. Ask ONE easy question about ${
-            { area: 'where they want to live (a city or two is enough)', price: 'a comfortable price range or monthly payment', timing: 'when they would ideally like to move', beds: 'how many bedrooms they need', open: 'what would make a home a yes for them right now' }[nextQuestion(f, c.step)]
-          }. Make it answerable in a few words.`;
-  return `You are writing a ${c.channel} from ${c.agentName}, a real estate agent, to a lead.
+  const offer = c.touch === 'offer' && c.offer ? `PROGRAM TO SHARE (written by the agent; use only what it says): ${c.offer.text}${c.offer.url ? `. Link: ${c.offer.url}` : ''}` : null;
+  const ask = { area: 'where they want to live (a city or two)', price: 'a comfortable price or monthly payment', timing: 'when they would like to move', beds: 'how many bedrooms they need', open: 'what would make a home a yes for them' }[nextQuestion(f, c.step)];
+  const plan = {
+    home: 'HOOK: the single most interesting thing about this home for them — the status (coming soon / just listed / just dropped), the price, or the one feature they asked for. VALUE: the few facts that prove it fits what they told us. CTA: an easy yes/no to see it (e.g. "Want to see it Saturday?").',
+    teaser: `HOOK: this home — its status and price, and the city. VALUE: one or two facts that make it a good deal. CTA: turn it into a question that tells us what they want, e.g. is this area / price in range, or where should I look instead? (We still need ${ask}.)`,
+    community: 'HOOK: the most concrete thing about this community (price from, builder incentive, move-in date) — only what is written above. VALUE: one reason it could fit them. CTA: one easy question (want the floor plans / a tour?).',
+    offer: `HOOK: the most concrete part of the program (a dollar amount, a rate, a deadline) — only what the agent wrote. VALUE: what it means for them in plain words. CTA: an easy question that also tells us ${ask}, or a yes/no to send details.`,
+    discovery: `There is nothing to share yet. HOOK: something specific we know about them (what they asked about, where they came from, how long they have been looking) or a sharp, curious question — never a greeting plus an introduction. VALUE: why answering helps them (e.g. you can send coming-soon homes before they hit Zillow). CTA: ask ${ask}, answerable in a few words.`,
+  }[c.touch];
+  const name = greetableName(c.lead.firstName);
+  return `You are writing a ${c.channel} from ${c.agentName}, a real estate agent, to a lead. It has to earn a reply.
 
 LEAD (facts you may use — nothing else):
 ${facts.join('\n')}
 Recent history (newest first):
 ${c.history.length ? c.history.map((h) => `- ${h}`).join('\n') : '- none'}
-${home ? `\n${home}\n` : ''}
-GOAL: ${goal}
+${home ? `\n${home}\n` : ''}${offer ? `\n${offer}\n` : ''}
+BUILD IT IN THREE BEATS — HOOK, VALUE, CTA
+${plan}
+- The HOOK is the first line and the only line most people read. Under 12 words. Specific beats clever: a number, a status, a place, or something they told us. ${name ? `It can start with their name ("${name}, ...").` : ''}
+- Never open with "Hi ${name ?? 'there'}, it's ${c.agentName.split(' ')[0]}" or any greeting + who-I-am line. ${c.step === 0 ? `Say who you are AFTER the hook, in a few words ("${c.agentName.split(' ')[0]} here").` : 'Do not re-introduce yourself.'}
+- VALUE is one or two short lines. CTA is the last line: ONE question they can answer in a few words or with yes/no. If there is a link, it goes on its own line after the question.
+- Before writing, draft 3 different hooks and keep the most specific, most curiosity-driving one.
+
+SHAPE ONLY — never reuse these facts:
+weak: "Hi Ernesto, it's Jeffry, a real estate agent. You reached out a while back. What city are you hoping to buy in?"
+strong: "Ernesto, a 4 bed in Fontana just went coming soon at $579K. Jeffry here, you messaged us a while back. Is Fontana on your list, or should I look somewhere else?"
+strong: "Maria, that Rialto 3 bed just dropped $15K. Now $524,900, single story, no HOA. Want to see it Saturday?"
 
 RULES
-- Sound like a real person texting from their phone: short, warm, specific. ${c.channel === 'text' ? 'Max 300 characters. No emojis unless natural. No links other than the one given.' : 'Max 90 words. Plain text, no formatting.'}
-- Never say "just checking in", "touching base", "hope this finds you well", "hope your year's going well", or anything that reads like a mass message. No small talk filler; get to the point in the first sentence.
-- Use their first name once if we have one. ${c.step === 0 ? `Since this may be the first message in a while, say who you are ("it's ${c.agentName.split(' ')[0]}").` : 'Do not re-introduce yourself.'}
-- Only use facts above. Never invent prices, homes, addresses, rates, dates or promises. About a home, say only the numbers given and the VERIFIED MLS phrases; never add features, adjectives about the yard, views, condition or upgrades that are not written there.
+- Sound like a real person texting from their phone. ${c.channel === 'text' ? 'Max 320 characters before the link. No emojis unless natural. No links other than the one given.' : 'Max 90 words. Plain text, no formatting.'}
+- Never: "just checking in", "touching base", "hope this finds you well", "hope you're doing well", "I wanted to reach out", "let me know if you have any questions", exclamation-mark hype, or anything that reads like a mass message.
+- Only use facts above. Never invent prices, homes, addresses, rates, programs, dates or promises. About a home, say only the numbers given and the VERIFIED MLS phrases; never add features, adjectives about the yard, views, condition or upgrades that are not written there.
 - Never show the lead our internal labels: no CRM stage names ("Sent to Lender", "Contacted"), campaign or source codes (e.g. "NB4Y", "IG Messenger", "text code"), tags or scores. You may say "Instagram" or "Facebook" only if the source plainly says so.
 - Fair housing: never describe a place by who lives there; no schools-as-demographics, no "family neighborhood" style steering.
 ${c.voice ? `- Write in this agent's style: ${c.voice}` : ''}
 
-Return JSON only: {"body": "...", ${c.channel === 'email' ? '"subject": "short, specific, lowercase-ish subject", ' : ''}"why": "one short line for the agent on why this message, e.g. 'Asks budget — we only know Fontana'"}`;
+Return JSON only: {"hooks": ["three", "candidate", "hooks"], "body": "...", ${c.channel === 'email' ? '"subject": "short, specific, lowercase-ish subject that works as a hook", ' : ''}"why": "one short line for the agent on why this message, e.g. 'Coming soon in Fontana; asks if that is their area'"}`;
 }
 
 /** Stages that mean the deal is done or dead: never nurture these. */

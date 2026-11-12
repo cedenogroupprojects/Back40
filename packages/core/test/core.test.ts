@@ -159,6 +159,10 @@ test('nurture: cadence, channel and touch choice', async () => {
   assert.equal(n.touchKind({}, 0, { home: false, community: false }), 'discovery');
   assert.equal(n.touchKind({ areas: ['Chino'] }, 0, { home: true, community: true }), 'home');
   assert.equal(n.touchKind({ areas: ['Chino'] }, 2, { home: true, community: true }), 'community');
+  // No criteria: a hot home from the agent's market is the hook; offers alternate in.
+  assert.equal(n.touchKind({}, 0, { home: true, community: false }), 'teaser');
+  assert.equal(n.touchKind({}, 1, { home: true, community: false, offer: true }), 'offer');
+  assert.equal(n.touchKind({}, 0, { home: false, community: false, offer: true }), 'offer');
   const now = Date.parse('2026-11-09T12:00:00Z');
   assert.equal(n.nurtureEligible({ createdAt: '2026-11-08T12:00:00Z', lastContactAt: null, fields: {}, pinned: false }, now), false);
   assert.equal(n.nurtureEligible({ createdAt: '2026-09-01T12:00:00Z', lastContactAt: '2026-10-01T12:00:00Z', fields: {}, pinned: false }, now), true);

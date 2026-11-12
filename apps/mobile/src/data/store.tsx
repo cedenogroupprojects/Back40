@@ -94,6 +94,10 @@ type Store = {
   decideDraft: (id: string, decision: 'sent' | 'skipped', body?: string) => void;
   /** Swap the home on a nurture message; the message is rewritten around it. */
   swapHome: (draftId: string, homeId: string) => Promise<void>;
+  /** Look up homes for a message (also one written without a home). Returns an error to show, if any. */
+  findHomes: (draftId: string, more?: boolean) => Promise<string | null>;
+  /** Rewrite a message without its home. */
+  dropHome: (draftId: string) => Promise<void>;
   reassign: (fromAgentId: string) => void;
   updateSettings: (patch: Partial<Settings>) => void;
   finishOnboarding: (patch: Partial<Settings>) => void;
@@ -395,6 +399,23 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setDrafts((ds) => ds.map((x) => (x.id === draftId ? { ...x, body: next.body, subject: next.subject ?? undefined, why: next.why, home: next.home } : x)));
   };
 
+  const findHomes: Store['findHomes'] = async (draftId, more = false) => {
+    if (!liveRef.current) return 'Sign in to pull homes from your MLS.';
+    const r = await live.findHomes(draftId, more);
+    if (!r.ok || !r.options) return r.error ?? 'No homes fit right now.';
+    setDrafts((ds) => ds.map((x) => (x.id === draftId ? { ...x, homeOptions: r.options! } : x)));
+    return null;
+  };
+
+  const dropHome: Store['dropHome'] = async (draftId) => {
+    if (!liveRef.current) {
+      setDrafts((ds) => ds.map((x) => (x.id === draftId ? { ...x, home: null } : x)));
+      return;
+    }
+    const next = await live.dropHome(draftId);
+    setDrafts((ds) => ds.map((x) => (x.id === draftId ? { ...x, body: next.body, subject: next.subject ?? undefined, why: next.why, home: null } : x)));
+  };
+
   const reassign = (fromAgentId: string) =>
     setTeam((t) => t.map((a) => (a.id === fromAgentId ? { ...a, staleHotLeads: 0 } : a.id === 'sam' ? { ...a, staleHotLeads: a.staleHotLeads } : a)));
 
@@ -427,7 +448,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     score,
     streak,
     labelText: LABEL_TEXT,
-    logCall, togglePin, updateLead, setCommission, addNote, addLead, sendMessage, decideDraft, swapHome, reassign, updateSettings, finishOnboarding,
+    logCall, togglePin, updateLead, setCommission, addNote, addLead, sendMessage, decideDraft, swapHome, findHomes, dropHome, reassign, updateSettings, finishOnboarding,
   };
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

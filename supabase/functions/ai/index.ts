@@ -29,11 +29,11 @@ async function callModel(model: string, system: string, user: string, maxTokens:
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: { 'x-api-key': Deno.env.get('ANTHROPIC_API_KEY')!, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-    body: JSON.stringify({ model, max_tokens: maxTokens, system, messages: [{ role: 'user', content: user }] }),
+    body: JSON.stringify({ model, max_tokens: Math.max(maxTokens * 8, 4000), system, messages: [{ role: 'user', content: user }] }),
   });
   if (!res.ok) throw new Error(`model ${res.status}`);
   const out = await res.json();
-  return { text: (out.content?.[0]?.text ?? '') as string, usage: out.usage as { input_tokens: number; output_tokens: number } };
+  return { text: ((out.content ?? []) as { type?: string; text?: string }[]).filter((b) => b.type === 'text').map((b) => b.text ?? '').join('\n'), usage: out.usage as { input_tokens: number; output_tokens: number } };
 }
 
 function record(lead: Record<string, unknown>, timeline: Record<string, unknown>[]) {

@@ -6,7 +6,7 @@ import { router } from 'expo-router';
 import { useState } from 'react';
 import { ActivityIndicator, Image, Linking, Pressable, TextInput, View } from 'react-native';
 
-import { BADGE_TEXT, type HomeCard } from '@back40/core';
+import { BADGE_TEXT, type Draft, type HomeCard } from '@back40/core';
 
 import { Icon } from '@/components/Icon';
 import { Avatar, Card, IconButton, Pill, Row, Screen, T, NavBar, List, ListRow, SectionLabel } from '@/components/ui';
@@ -55,74 +55,120 @@ function Home({ h }: { h: HomeCard }) {
   );
 }
 
-/** Pick one of up to 5 homes; the message rewrites itself around it. */
-function HomePicker({ options, current, onPick }: { options: HomeCard[]; current?: string; onPick: (id: string) => Promise<void> }) {
+/**
+ * Change the home on any waiting message: pick from the options, pull different
+ * ones, add a home to a message that has none, or send it without a home.
+ */
+function HomeSwap({ draft, onChanged }: { draft: Draft; onChanged: () => void }) {
   const { c } = useTheme();
+  const { swapHome, findHomes, dropHome } = useStore();
   const [open, setOpen] = useState(false);
-  const [busy, setBusy] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null); // a home id, 'find', 'more' or 'none'
   const [err, setErr] = useState<string | null>(null);
-  if (options.length < 2) return null;
-  const pick = async (id: string) => {
-    if (id === current || busy) return;
-    setBusy(id);
+  const options = (draft.homeOptions ?? []).filter((h) => h.kind === 'listing');
+  const current = draft.home?.id;
+
+  const run = async (key: string, job: () => Promise<string | null | void>) => {
+    if (busy) return;
+    setBusy(key);
     setErr(null);
     try {
-      await onPick(id);
-      setOpen(false);
+      const msg = await job();
+      if (msg) setErr(msg);
+      return !msg;
     } catch (e) {
       setErr((e as Error).message);
+      return false;
     } finally {
       setBusy(null);
     }
   };
+  const toggle = async () => {
+    if (open) return setOpen(false);
+    setOpen(true);
+    if (options.length < 2) await run('find', () => findHomes(draft.id));
+  };
+  const pick = async (id: string) => {
+    if (id === current) return;
+    if (await run(id, () => swapHome(draft.id, id))) {
+      setOpen(false);
+      onChanged();
+    }
+  };
+  const none = async () => {
+    if (await run('none', () => dropHome(draft.id))) {
+      setOpen(false);
+      onChanged();
+    }
+  };
+
   return (
-    <View style={{ gap: 8 }}>
-      <Pressable accessibilityRole="button" onPress={() => setOpen((v) => !v)} style={{ alignSelf: 'flex-start', paddingVertical: 4 }}>
-        <T w="semibold" size={14} tone="accent">
-          {open ? 'Keep this home' : `Pick a different home (${options.length})`}
+    <View style={{ gap: 10 }}>
+      <Pressable
+        accessibilityRole="button"
+        onPress={() => void toggle()}
+        style={({ pressed }) => ({ minHeight: 48, borderRadius: 14, borderWidth: 1.5, borderColor: open ? c.text : c.sep, backgroundColor: c.card, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, opacity: pressed ? 0.7 : 1 })}>
+        <Icon name={open ? 'close' : current ? 'board' : 'plus'} size={17} color={c.text} width={2.2} />
+        <T w="bold" size={15}>
+          {open ? 'Keep it as is' : current ? 'Swap home' : 'Add a home'}
         </T>
       </Pressable>
       {open ? (
         <View style={{ gap: 8 }}>
-          {options.map((h) => {
-            const on = h.id === current;
-            const facts = [h.price ? money(h.price, false) : null, h.beds ? `${h.beds} bd` : null, h.baths ? `${h.baths} ba` : null, h.sqft ? `${h.sqft.toLocaleString('en-US')} sqft` : null].filter(Boolean).join(' · ');
-            return (
-              <Pressable key={h.id} accessibilityRole="button" accessibilityState={{ selected: on }} accessibilityLabel={`Use ${h.title}`} onPress={() => void pick(h.id)}>
-                <Row gap={12} style={{ borderRadius: 14, padding: 10, backgroundColor: on ? c.soft : c.card, borderWidth: 1.5, borderColor: on ? c.text : c.sep }}>
-                  {h.photo ? (
-                    <Image source={{ uri: h.photo }} style={{ width: 72, height: 72, borderRadius: 10, backgroundColor: c.track }} accessibilityIgnoresInvertColors />
-                  ) : (
-                    <View style={{ width: 72, height: 72, borderRadius: 10, backgroundColor: c.soft }} />
-                  )}
-                  <View style={{ flex: 1, gap: 2 }}>
-                    {h.badge ? (
-                      <T size={11} w="semibold" tone="accent">
-                        {BADGE_TEXT[h.badge].toUpperCase()}
-                        {h.badge === 'new' && h.daysOnMarket != null ? ` · ${h.daysOnMarket === 0 ? 'today' : `${h.daysOnMarket}d`}` : ''}
+          {busy === 'find' || busy === 'more' ? (
+            <Row gap={10} style={{ paddingVertical: 14, justifyContent: 'center' }}>
+              <ActivityIndicator color={c.sub} />
+              <T size={14} tone="sub">
+                Checking your MLS for homes that fit…
+              </T>
+            </Row>
+          ) : (
+            options.map((h) => {
+              const on = h.id === current;
+              const facts = [h.price ? money(h.price, false) : null, h.beds ? `${h.beds} bd` : null, h.baths ? `${h.baths} ba` : null, h.sqft ? `${h.sqft.toLocaleString('en-US')} sqft` : null].filter(Boolean).join(' · ');
+              return (
+                <Pressable key={h.id} accessibilityRole="button" accessibilityState={{ selected: on }} accessibilityLabel={`Use ${h.title}`} onPress={() => void pick(h.id)}>
+                  <Row gap={12} style={{ borderRadius: 14, padding: 10, backgroundColor: on ? c.soft : c.card, borderWidth: 1.5, borderColor: on ? c.text : c.sep }}>
+                    {h.photo ? (
+                      <Image source={{ uri: h.photo }} style={{ width: 72, height: 72, borderRadius: 10, backgroundColor: c.track }} accessibilityIgnoresInvertColors />
+                    ) : (
+                      <View style={{ width: 72, height: 72, borderRadius: 10, backgroundColor: c.soft }} />
+                    )}
+                    <View style={{ flex: 1, gap: 2 }}>
+                      {h.badge ? (
+                        <T size={11} w="semibold" tone="accent">
+                          {BADGE_TEXT[h.badge].toUpperCase()}
+                          {h.badge === 'new' && h.daysOnMarket != null ? ` · ${h.daysOnMarket === 0 ? 'today' : `${h.daysOnMarket}d`}` : ''}
+                        </T>
+                      ) : null}
+                      <T w="semibold" size={15} numberOfLines={1}>
+                        {h.title}
                       </T>
-                    ) : null}
-                    <T w="semibold" size={15} numberOfLines={1}>
-                      {h.title}
-                    </T>
-                    <T size={13} tone="sub" numberOfLines={1}>
-                      {[h.city, facts].filter(Boolean).join(' · ')}
-                    </T>
-                  </View>
-                  {busy === h.id ? <ActivityIndicator color={c.sub} /> : on ? <Icon name="check" size={18} color={c.text} /> : null}
-                </Row>
-              </Pressable>
-            );
-          })}
+                      <T size={13} tone="sub" numberOfLines={1}>
+                        {[h.city, facts].filter(Boolean).join(' · ')}
+                      </T>
+                    </View>
+                    {busy === h.id ? <ActivityIndicator color={c.sub} /> : on ? <Icon name="check" size={18} color={c.text} /> : null}
+                  </Row>
+                </Pressable>
+              );
+            })
+          )}
           {err ? (
             <T size={13} tone="accent">
               {err}
             </T>
-          ) : (
+          ) : options.length && !busy ? (
             <T size={12} tone="sub">
               Tap a home and the message rewrites itself around it.
             </T>
-          )}
+          ) : null}
+          <Row gap={8}>
+            {options.length ? (
+              <Pill label={busy === 'more' ? 'Looking…' : 'Show different homes'} kind="soft" size="sm" disabled={!!busy} onPress={() => void run('more', () => findHomes(draft.id, true))} style={{ flex: 1 }} />
+            ) : null}
+            {current ? <Pill label={busy === 'none' ? 'Rewriting…' : 'No home'} kind="soft" size="sm" disabled={!!busy} onPress={() => void none()} style={{ flex: 1 }} /> : null}
+          </Row>
         </View>
       ) : null}
     </View>
@@ -131,7 +177,7 @@ function HomePicker({ options, current, onPick }: { options: HomeCard[]; current
 
 export function FollowUpQueue({ inTab = false }: { inTab?: boolean }) {
   const { c } = useTheme();
-  const { drafts, lead: get, decideDraft, swapHome } = useStore();
+  const { drafts, lead: get, decideDraft } = useStore();
   const pending = drafts.filter((d) => d.status === 'pending');
   const total = drafts.length;
   const d = pending[0];
@@ -260,7 +306,7 @@ export function FollowUpQueue({ inTab = false }: { inTab?: boolean }) {
                 {held[d.id]}
               </T>
             ) : null}
-            {d.homeOptions?.length ? <HomePicker key={d.id} options={d.homeOptions} current={d.home?.id} onPick={(id) => swapHome(d.id, id).then(() => setHeld((h) => { const n = { ...h }; delete n[d.id]; return n; }))} /> : null}
+            <HomeSwap key={d.id} draft={d} onChanged={() => setHeld((h) => { const n = { ...h }; delete n[d.id]; return n; })} />
             <T size={13} tone="sub">
               <T w="semibold" size={13} tone="sub">
                 Why:{' '}

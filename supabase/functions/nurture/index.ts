@@ -15,7 +15,7 @@
 import {
   checkHardRequirements, criteriaFromNotesPrompt, linkLast, DEAL_SEARCHES, DONE_STAGE, factCheckPrompt, firstTouchAt, listingCheckPrompt, loftyListingDetail, loftySearchListings,
   nextTouchAt, NOTES_READER_VERSION, nurtureEligible, nurturePrompt, parseCriteria, parseListingCheck, pickChannel, touchKind,
-  type CrmKind, type DealKind, type HomeCard, type LeadFields,
+  type CrmKind, type DealKind, type HomeCard, type LeadFields, type Offer, type Touch,
 } from '../_shared/core/index.ts';
 import { credentialsFor, json, preflight, serviceClient, userClient, type Connection } from '../_shared/db.ts';
 
@@ -38,7 +38,7 @@ const NEVER = '1970-01-01T00:00:00.000Z'; // notesReadAt for 'checked, nothing t
 const CAN_SEND: Record<string, boolean> = { lofty: true, gohighlevel: true }; // Follow Up Boss can't send through its API
 const db = serviceClient();
 
-type Settings = { org_id: string; user_id: string; enabled: boolean; mode: 'approve' | 'auto'; daily_limit: number; channels: ('text' | 'email')[]; website_url: string | null; last_run_on: string | null };
+type Settings = { org_id: string; user_id: string; enabled: boolean; mode: 'approve' | 'auto'; daily_limit: number; channels: ('text' | 'email')[]; website_url: string | null; last_run_on: string | null; offers?: Offer[] };
 type LeadRow = {
   id: string; org_id: string; connection_id: string | null; crm: CrmKind | 'manual'; crm_lead_id: string; first_name: string; last_name: string;
   phone: string | null; email: string | null; stage: string; source: string | null; crm_created_at: string; last_contact_at: string | null; fields: LeadFields;
@@ -48,7 +48,7 @@ Deno.serve(async (req) => {
   const pre = preflight(req);
   if (pre) return pre;
   if (req.method !== 'POST') return json({ error: 'method' }, 405);
-  const body = (await req.json().catch(() => ({}))) as { preview?: boolean; limit?: number; action?: 'swap' | 'verify'; draftId?: string; homeId?: string };
+  const body = (await req.json().catch(() => ({}))) as { preview?: boolean; limit?: number; action?: 'swap' | 'verify' | 'homes' | 'nohome'; draftId?: string; homeId?: string; more?: boolean; refresh?: number };
 
   // Who's calling: the scheduler, or an agent asking for their batch now.
   const secret = req.headers.get('x-cron-secret');
@@ -56,6 +56,12 @@ Deno.serve(async (req) => {
     const { data: ok } = await db.rpc('cron_secret_ok', { s: secret });
     if (!ok) return json({ error: 'forbidden' }, 403);
     const { data: all } = await db.from('nurture_settings').select('*').eq('enabled', true);
+    // Upgrade messages written before the hook/value/CTA rules: rewrite the oldest waiting ones.
+    if (body.refresh) {
+      const out: Record<string, number> = {};
+      for (const s of (all ?? []) as Settings[]) out[s.user_id] = await refreshPending(s, Math.min(body.refresh, 25));
+      return json({ ok: true, refreshed: out });
+    }
     const results = [];
     for (const s of (all ?? []) as Settings[]) {
       try {
@@ -85,6 +91,8 @@ Deno.serve(async (req) => {
   if (!member) return json({ error: 'No team found.' }, 400);
   if (body.action === 'swap') return swapHome(me as string, member.org_id as string, body.draftId ?? '', body.homeId ?? '');
   if (body.action === 'verify') return verifyDraft(me as string, body.draftId ?? '');
+  if (body.action === 'homes') return homesFor(me as string, member.org_id as string, body.draftId ?? '', !!body.more);
+  if (body.action === 'nohome') return dropHome(me as string, member.org_id as string, body.draftId ?? '');
   let { data: s } = await db.from('nurture_settings').select('*').eq('org_id', member.org_id).eq('user_id', me).maybeSingle<Settings>();
   if (!s) {
     const { data: created } = await db.from('nurture_settings').insert({ org_id: member.org_id, user_id: me, enabled: true }).select('*').single<Settings>();
@@ -192,13 +200,14 @@ async function draftDue(s: Settings, limit: number, tz: string, quietEnd?: strin
 
     // Find something worth sending: up to 5 coming-soon / new / price-drop homes.
     const sent = new Set((st.sent_home_ids as string[]) ?? []);
-    const options = await findListings(lead, fields, sent, credsCache, s);
+    const options = await homeOptions(lead, fields, sent, credsCache, s);
     const listing = options[0] ?? null;
     const community = await findCommunity(s.org_id, fields, sent);
-    const touch = touchKind(fields, st.step as number, { home: !!listing, community: !!community });
-    const home: HomeCard | null = touch === 'home' ? listing : touch === 'community' ? community : null;
+    const offer = pickOffer(s.offers, st.step as number);
+    const touch = touchKind(fields, st.step as number, { home: !!listing, community: !!community, offer: !!offer });
+    const home: HomeCard | null = touch === 'home' || touch === 'teaser' ? listing : touch === 'community' ? community : null;
 
-    const prompt = await promptFor(lead, fields, { agentName, voice, channel, step: st.step as number, touch, home });
+    const prompt = await promptFor(lead, fields, { agentName, voice, channel, step: st.step as number, touch, home, offer });
 
     let msg: { body: string; subject?: string; why: string };
     try {
@@ -226,7 +235,7 @@ async function draftDue(s: Settings, limit: number, tz: string, quietEnd?: strin
     await db.from('drafts').insert({
       org_id: s.org_id, lead_id: leadId, user_id: s.user_id, channel, play: 'nurture',
       subject: msg.subject ?? null, body: msg.body, why: msg.why, status: 'pending', home, send_after: sendAfter,
-      home_options: touch === 'home' && options.length > 1 ? options : null,
+      home_options: (touch === 'home' || touch === 'teaser') && options.length > 1 ? options : null,
     });
     await db.from('nurture_state').update({
       step: (st.step as number) + 1,
@@ -356,6 +365,46 @@ function toListingCard(r: Record<string, unknown>, badge?: DealKind): HomeCard |
   };
 }
 
+/**
+ * Homes for a lead. When we know nothing about what they want, fall back to the
+ * agent's usual market (the cities and price most of their leads shop) so the
+ * message can lead with a real home and ask if that's their area.
+ */
+async function homeOptions(lead: LeadRow, f: LeadFields, sent: Set<string>, cache: Map<string, unknown>, s: Pick<Settings, 'org_id' | 'user_id'>): Promise<HomeCard[]> {
+  if (f.areas?.length || f.budgetMax) return findListings(lead, f, sent, cache, s);
+  const m = await marketFor(s.user_id, cache);
+  if (!m) return [];
+  // Same market search for every lead tonight: do it once per run, then skip what each lead already got.
+  const key = `mkthomes:${s.user_id}`;
+  if (!cache.has(key)) cache.set(key, await findListings(lead, { areas: m.areas, budgetMax: m.budgetMax }, new Set(), cache, s));
+  return (cache.get(key) as HomeCard[]).filter((h) => !sent.has(h.id));
+}
+
+/** The cities and price an agent's leads most often want (from their notes and CRM fields). */
+async function marketFor(userId: string, cache: Map<string, unknown>): Promise<{ areas: string[]; budgetMax?: number } | null> {
+  const k = `mkt:${userId}`;
+  if (cache.has(k)) return cache.get(k) as { areas: string[]; budgetMax?: number } | null;
+  const { data } = await db.from('leads').select('fields').eq('assigned_user_id', userId).not('fields->areas', 'is', null).limit(800);
+  const counts = new Map<string, number>();
+  const prices: number[] = [];
+  for (const r of data ?? []) {
+    const f = (r.fields ?? {}) as LeadFields;
+    for (const a of f.areas ?? []) counts.set(a, (counts.get(a) ?? 0) + 1);
+    if (f.budgetMax && f.budgetMax > 100_000 && f.budgetMax < 5_000_000) prices.push(f.budgetMax);
+  }
+  const areas = [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4).map(([a]) => a);
+  prices.sort((a, b) => a - b);
+  const out = areas.length ? { areas, budgetMax: prices.length ? prices[Math.floor(prices.length / 2)] : undefined } : null;
+  cache.set(k, out);
+  return out;
+}
+
+/** Rotate through the agent's programs, one per message. */
+function pickOffer(offers: Offer[] | undefined, step: number): Offer | null {
+  const list = (offers ?? []).filter((o) => o && typeof o.text === 'string' && o.text.trim().length > 5);
+  return list.length ? list[step % list.length]! : null;
+}
+
 /** A new-build community from the shared catalog (or the team's own) that fits. */
 async function findCommunity(orgId: string, f: LeadFields, sent: Set<string>): Promise<HomeCard | null> {
   let q = db.from('communities').select('*').eq('active', true).or(`org_id.is.null,org_id.eq.${orgId}`).limit(50);
@@ -377,7 +426,7 @@ async function findCommunity(orgId: string, f: LeadFields, sent: Set<string>): P
   };
 }
 
-async function write(prompt: string, s: Pick<Settings, 'org_id' | 'user_id'>, model = MODEL, maxTokens = 400): Promise<{ body: string; subject?: string; why: string }> {
+async function write(prompt: string, s: Pick<Settings, 'org_id' | 'user_id'>, model = MODEL, maxTokens = 700): Promise<{ body: string; subject?: string; why: string }> {
   const parsed = await askModel(prompt, s, model, maxTokens);
   if (!parsed.body) throw new Error('empty draft');
   return { body: linkLast(String(parsed.body)), subject: parsed.subject ? String(parsed.subject) : undefined, why: String(parsed.why ?? 'Keeping in touch') };
@@ -396,7 +445,8 @@ async function askModel(prompt: string, s: Pick<Settings, 'org_id' | 'user_id'>,
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-    body: JSON.stringify({ model, max_tokens: maxTokens, messages: [{ role: 'user', content: prompt }] }),
+    // Room for the model to think before it answers (thinking counts toward max_tokens).
+    body: JSON.stringify({ model, max_tokens: Math.max(maxTokens * 8, 4000), messages: [{ role: 'user', content: prompt }] }),
   });
   if (!res.ok) throw new Error(`model ${res.status} ${(await res.text()).slice(0, 200)}`);
   const out = await res.json();
@@ -409,12 +459,19 @@ async function askModel(prompt: string, s: Pick<Settings, 'org_id' | 'user_id'>,
     },
     { onConflict: 'user_id,day' },
   );
-  const text = String(out.content?.[0]?.text ?? '');
-  return JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1));
+  // Newer models can put a thinking block first: read the text block, wherever it is.
+  const blocks = (out.content ?? []) as { type?: string; text?: string }[];
+  const text = blocks.filter((b) => b.type === 'text' && typeof b.text === 'string').map((b) => b.text).join('\n');
+  try {
+    return JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1));
+  } catch (e) {
+    console.error('model reply not JSON', model, out.stop_reason, blocks.map((b) => b.type).join(','), text.slice(0, 160));
+    throw e;
+  }
 }
 
 /** The message prompt for a lead, with its recent history (CRM notes included). */
-async function promptFor(lead: LeadRow, fields: LeadFields, o: { agentName: string; voice?: string; channel: 'text' | 'email'; step: number; touch: ReturnType<typeof touchKind>; home: HomeCard | null }) {
+async function promptFor(lead: LeadRow, fields: LeadFields, o: { agentName: string; voice?: string; channel: 'text' | 'email'; step: number; touch: Touch; home: HomeCard | null; offer?: Offer | null }) {
   const { data: history } = await db.from('timeline_items').select('at, kind, title, body').eq('lead_id', lead.id).order('at', { ascending: false }).limit(6);
   return nurturePrompt({
     ...o,
@@ -505,33 +562,116 @@ async function verifyDraft(me: string, draftId: string) {
   return json(r.ok ? { ok: true } : { ok: false, error: `This home just went ${r.status}. Pick a different home before sending.` });
 }
 
-/** The agent picked a different home from the 5 options: rewrite the message around it. */
-async function swapHome(me: string, orgId: string, draftId: string, homeId: string) {
-  const { data: d } = await db.from('drafts').select('*').eq('id', draftId).eq('user_id', me).eq('status', 'pending').maybeSingle();
-  if (!d) return json({ error: 'That message was already sent or removed.' }, 404);
-  const options = (d.home_options ?? []) as HomeCard[];
-  const home = options.find((h) => h.id === homeId);
-  if (!home) return json({ error: 'That home is no longer available.' }, 400);
+type DraftRow = { id: string; lead_id: string; channel: 'text' | 'email'; subject: string | null; home: HomeCard | null; home_options: HomeCard[] | null };
+
+async function loadDraft(me: string, draftId: string) {
+  const { data: d } = await db.from('drafts').select('*').eq('id', draftId).eq('user_id', me).eq('status', 'pending').maybeSingle<DraftRow>();
+  if (!d) return null;
   const { data: lead } = await db.from('leads').select('*').eq('id', d.lead_id).maybeSingle<LeadRow>();
-  if (!lead) return json({ error: 'Lead not found.' }, 404);
+  if (!lead) return null;
   const { data: st } = await db.from('nurture_state').select('step, sent_home_ids').eq('lead_id', lead.id).maybeSingle();
+  return { d, lead, st };
+}
+
+/** Rewrite a waiting message around a different home (or none), keeping everything else. */
+async function rewrite(me: string, orgId: string, x: NonNullable<Awaited<ReturnType<typeof loadDraft>>>, home: HomeCard | null) {
+  const { d, lead, st } = x;
+  const fields = (lead.fields ?? {}) as LeadFields;
   const { data: member } = await db.from('members').select('display_name, voice_profile').eq('org_id', orgId).eq('user_id', me).maybeSingle();
+  const { data: ns } = await db.from('nurture_settings').select('offers').eq('org_id', orgId).eq('user_id', me).maybeSingle();
   const step = Math.max(0, Number(st?.step ?? 1) - 1); // the draft was written for the step before the bump
-  const prompt = await promptFor(lead, (lead.fields ?? {}) as LeadFields, {
+  const knows = !!(fields.areas?.length || fields.budgetMax);
+  const offer = home ? null : pickOffer(ns?.offers as Offer[] | undefined, step);
+  const touch: Touch = home ? (home.kind === 'community' ? 'community' : knows ? 'home' : 'teaser') : offer ? 'offer' : 'discovery';
+  const prompt = await promptFor(lead, fields, {
     agentName: (member?.display_name as string) || 'your agent',
     voice: (member?.voice_profile as { summary?: string } | null)?.summary,
-    channel: d.channel, step, touch: 'home', home,
+    channel: d.channel, step, touch, home, offer,
   });
   let msg: Awaited<ReturnType<typeof write>>;
   try {
     msg = await write(prompt, { org_id: orgId, user_id: me });
+    if (home?.kind === 'listing') {
+      const check = await askModel(factCheckPrompt(msg.body, home), { org_id: orgId, user_id: me }, FAST_MODEL, 150).catch(() => ({ ok: true }) as Record<string, unknown>);
+      if (check.ok === false) msg = await write(`${prompt}\n\nIMPORTANT: a previous draft wrongly said "${String(check.problem ?? '').slice(0, 160)}". Mention only the listed numbers and verified MLS phrases.`, { org_id: orgId, user_id: me });
+    }
   } catch (e) {
+    console.error('rewrite failed', String(e).slice(0, 200));
     return json({ error: String(e).includes('daily_cap') ? 'Daily AI limit reached. Try tomorrow.' : 'Could not rewrite the message. Try again.' }, 500);
   }
-  const sentIds = ((st?.sent_home_ids ?? []) as string[]).filter((x) => x !== (d.home as HomeCard | null)?.id);
-  await db.from('nurture_state').update({ sent_home_ids: [...sentIds, home.id], updated_at: new Date().toISOString() }).eq('lead_id', lead.id);
+  const sentIds = ((st?.sent_home_ids ?? []) as string[]).filter((id) => id !== d.home?.id);
+  await db.from('nurture_state').update({ sent_home_ids: home ? [...sentIds, home.id] : sentIds, updated_at: new Date().toISOString() }).eq('lead_id', lead.id);
   const { data: updated } = await db.from('drafts').update({ body: msg.body, subject: msg.subject ?? d.subject, why: msg.why, home }).eq('id', d.id).select('*').single();
   return json({ ok: true, draft: updated });
+}
+
+/** The agent picked one of the home options: rewrite the message around it. */
+async function swapHome(me: string, orgId: string, draftId: string, homeId: string) {
+  const x = await loadDraft(me, draftId);
+  if (!x) return json({ error: 'That message was already sent or removed.' }, 404);
+  const home = (x.d.home_options ?? []).find((h) => h.id === homeId);
+  if (!home) return json({ error: 'That home is no longer available.' }, 400);
+  return rewrite(me, orgId, x, home);
+}
+
+/** Send it without a home: rewrite as a program or a question. */
+async function dropHome(me: string, orgId: string, draftId: string) {
+  const x = await loadDraft(me, draftId);
+  if (!x) return json({ error: 'That message was already sent or removed.' }, 404);
+  return rewrite(me, orgId, x, null);
+}
+
+/**
+ * Find homes for any waiting message, on demand (also for messages that were
+ * written without one). more = skip the homes already shown.
+ */
+async function homesFor(me: string, orgId: string, draftId: string, more: boolean) {
+  const x = await loadDraft(me, draftId);
+  if (!x) return json({ error: 'That message was already sent or removed.' }, 404);
+  const { d, lead, st } = x;
+  if (lead.crm !== 'lofty') return json({ ok: false, error: 'Homes come from Lofty for now. Connect Lofty to add homes.' });
+  const fields = (lead.fields ?? {}) as LeadFields;
+  const skip = new Set<string>((st?.sent_home_ids ?? []) as string[]);
+  if (d.home) skip.delete(d.home.id);
+  if (more) for (const h of d.home_options ?? []) if (h.id !== d.home?.id) skip.add(h.id);
+  const cache = new Map<string, unknown>();
+  const found = await homeOptions(lead, fields, skip, cache, { org_id: orgId, user_id: me });
+  if (!found.length) {
+    const knows = !!(fields.areas?.length || fields.budgetMax);
+    return json({
+      ok: false,
+      error: knows
+        ? `No coming-soon, new or price-drop homes fit ${lead.first_name || 'them'} right now.`
+        : `We don't know where ${lead.first_name || 'they'} wants to buy yet. Add a city or price to their notes in Lofty.`,
+    });
+  }
+  const options = d.home && !found.some((h) => h.id === d.home!.id) ? [d.home, ...found] : found;
+  await db.from('drafts').update({ home_options: options }).eq('id', d.id);
+  return json({ ok: true, options });
+}
+
+/** Rewrite a few waiting messages that have no home with today's rules (a home, program or sharper question). */
+async function refreshPending(s: Settings, n: number) {
+  const { data: rows } = await db.from('drafts').select('id').eq('user_id', s.user_id).eq('play', 'nurture').eq('status', 'pending').is('home', null).is('send_after', null).order('created_at').limit(n);
+  let done = 0;
+  const cache = new Map<string, unknown>();
+  for (const r of rows ?? []) {
+    const x = await loadDraft(s.user_id, r.id as string);
+    if (!x) continue;
+    const fields = (x.lead.fields ?? {}) as LeadFields;
+    const sent = new Set<string>((x.st?.sent_home_ids ?? []) as string[]);
+    const options = await homeOptions(x.lead, fields, sent, cache, s).catch(() => [] as HomeCard[]);
+    if (options.length > 1) {
+      await db.from('drafts').update({ home_options: options }).eq('id', x.d.id);
+      x.d.home_options = options;
+    }
+    const step = Math.max(0, Number(x.st?.step ?? 1) - 1);
+    const touch = touchKind(fields, step, { home: options.length > 0, community: false, offer: !!pickOffer(s.offers, step) });
+    const res = await rewrite(s.user_id, s.org_id, x, touch === 'home' || touch === 'teaser' ? options[0]! : null);
+    if (res.status === 200) done++;
+    else if (res.status === 500) break; // AI limit
+  }
+  return done;
 }
 
 /** Auto mode: send drafts whose time has come, through the CRM, logged like any message. */

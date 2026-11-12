@@ -153,6 +153,12 @@ export default function Nurture() {
             ))}
           </List>
 
+          <SectionLabel>Programs worth texting about</SectionLabel>
+          <Offers offers={s.offers} onChange={(offers) => update({ offers })} />
+          <T size={13} tone="sub" style={{ paddingHorizontal: 16 }}>
+            Builder incentives, rate buydowns, down payment help. Back 40 uses one as the hook when there’s no home to send, and never adds details you didn’t write.
+          </T>
+
           <SectionLabel>Your website</SectionLabel>
           <List>
             <View style={{ minHeight: 48, justifyContent: 'center', paddingHorizontal: 16 }}>
@@ -179,7 +185,7 @@ export default function Nurture() {
               What every message looks like
             </T>
             <T size={14} tone="body">
-              One lead, one thing worth their time: a home that fits, a new-build community, or one easy question when we don’t know what they want yet. Never “just checking in.”
+              A hook in the first line, one thing worth their time (a home, a program, a new-build community), then one easy question. Never “just checking in.”
             </T>
             <T size={14} tone="body">
               How often depends on their timeline: weekly if they’re buying in 0–3 months, monthly at 6–12. Do-not-text and do-not-email are always respected.
@@ -196,5 +202,38 @@ export default function Nurture() {
         </>
       )}
     </Screen>
+  );
+}
+
+/** The agent's own programs and incentives, one line each. */
+function Offers({ offers, onChange }: { offers: NurtureSettings['offers']; onChange: (o: NurtureSettings['offers']) => void }) {
+  const { c } = useTheme();
+  const [draft, setDraft] = useState('');
+  const add = () => {
+    const text = draft.trim();
+    if (text.length < 6 || offers.length >= 8) return;
+    const url = text.match(/https?:\/\/\S+/)?.[0];
+    onChange([...offers, { text: url ? text.replace(url, '').trim() : text, ...(url ? { url } : {}) }]);
+    setDraft('');
+  };
+  return (
+    <List>
+      {offers.map((o, i) => (
+        <ListRow key={`${i}-${o.text}`} label={o.text} sub={o.url} right={<Pill label="Remove" kind="soft" size="sm" onPress={() => onChange(offers.filter((_, k) => k !== i))} />} />
+      ))}
+      <View style={{ minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingVertical: 6 }}>
+        <TextInput
+          value={draft}
+          onChangeText={setDraft}
+          onSubmitEditing={add}
+          placeholder="e.g. Builder pays $15K closing costs in Menifee through 12/31"
+          placeholderTextColor={c.sub}
+          returnKeyType="done"
+          accessibilityLabel="Add a program"
+          style={[font('regular'), { flex: 1, fontSize: 16, color: c.text, paddingVertical: 0, outlineWidth: 0 }]}
+        />
+        <Pill label="Add" kind="primary" size="sm" disabled={draft.trim().length < 6} onPress={add} />
+      </View>
+    </List>
   );
 }

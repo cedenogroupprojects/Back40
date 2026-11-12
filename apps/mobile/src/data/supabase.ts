@@ -166,20 +166,20 @@ export const connectCrm = (kind: CrmKind, apiKey: string) => fn<{ ok: boolean; i
 
 // ───────────────────────── Nurture ─────────────────────────
 
-export type NurtureSettings = { enabled: boolean; mode: 'approve' | 'auto'; dailyLimit: number; channels: ('text' | 'email')[]; websiteUrl: string | null };
-export const NURTURE_DEFAULTS: NurtureSettings = { enabled: false, mode: 'approve', dailyLimit: 15, channels: ['text', 'email'], websiteUrl: null };
+export type NurtureSettings = { enabled: boolean; mode: 'approve' | 'auto'; dailyLimit: number; channels: ('text' | 'email')[]; websiteUrl: string | null; offers: { text: string; url?: string }[] };
+export const NURTURE_DEFAULTS: NurtureSettings = { enabled: false, mode: 'approve', dailyLimit: 15, channels: ['text', 'email'], websiteUrl: null, offers: [] };
 
 export async function fetchNurture(orgId: string, userId: string): Promise<{ settings: NurtureSettings; active: number; dueThisWeek: number; stopped: number }> {
   const db = supabase();
   const weekAhead = new Date(Date.now() + 7 * 86_400_000).toISOString();
   const [{ data: s }, active, due, stopped] = await Promise.all([
-    db.from('nurture_settings').select('enabled, mode, daily_limit, channels, website_url').eq('org_id', orgId).eq('user_id', userId).maybeSingle(),
+    db.from('nurture_settings').select('enabled, mode, daily_limit, channels, website_url, offers').eq('org_id', orgId).eq('user_id', userId).maybeSingle(),
     db.from('nurture_state').select('lead_id', { count: 'exact', head: true }).eq('user_id', userId).eq('status', 'active'),
     db.from('nurture_state').select('lead_id', { count: 'exact', head: true }).eq('user_id', userId).eq('status', 'active').lte('next_at', weekAhead),
     db.from('nurture_state').select('lead_id', { count: 'exact', head: true }).eq('user_id', userId).neq('status', 'active'),
   ]);
   return {
-    settings: s ? { enabled: s.enabled, mode: s.mode, dailyLimit: s.daily_limit, channels: s.channels, websiteUrl: s.website_url } : NURTURE_DEFAULTS,
+    settings: s ? { enabled: s.enabled, mode: s.mode, dailyLimit: s.daily_limit, channels: s.channels, websiteUrl: s.website_url, offers: Array.isArray(s.offers) ? s.offers : [] } : NURTURE_DEFAULTS,
     active: active.count ?? 0,
     dueThisWeek: due.count ?? 0,
     stopped: stopped.count ?? 0,
@@ -188,7 +188,7 @@ export async function fetchNurture(orgId: string, userId: string): Promise<{ set
 
 export async function saveNurture(orgId: string, userId: string, s: NurtureSettings) {
   const { error } = await supabase().from('nurture_settings').upsert(
-    { org_id: orgId, user_id: userId, enabled: s.enabled, mode: s.mode, daily_limit: s.dailyLimit, channels: s.channels, website_url: s.websiteUrl, updated_at: new Date().toISOString() },
+    { org_id: orgId, user_id: userId, enabled: s.enabled, mode: s.mode, daily_limit: s.dailyLimit, channels: s.channels, website_url: s.websiteUrl, offers: s.offers, updated_at: new Date().toISOString() },
     { onConflict: 'org_id,user_id' },
   );
   if (error) throw error;
@@ -203,6 +203,17 @@ export const verifyDraft = (draftId: string) => fn<{ ok: boolean; error?: string
 /** Rewrite a nurture message around a different home from its options. */
 export async function swapHome(draftId: string, homeId: string) {
   const r = await fn<{ ok: boolean; draft: { body: string; subject: string | null; why: string; home: Draft['home'] } }>('nurture', { action: 'swap', draftId, homeId });
+  return r.draft;
+}
+
+/** Find homes for a waiting message (more = skip the ones already shown). */
+export async function findHomes(draftId: string, more: boolean) {
+  return fn<{ ok: boolean; options?: NonNullable<Draft['homeOptions']>; error?: string }>('nurture', { action: 'homes', draftId, more });
+}
+
+/** Rewrite a waiting message without a home. */
+export async function dropHome(draftId: string) {
+  const r = await fn<{ ok: boolean; draft: { body: string; subject: string | null; why: string; home: Draft['home'] } }>('nurture', { action: 'nohome', draftId });
   return r.draft;
 }
 
