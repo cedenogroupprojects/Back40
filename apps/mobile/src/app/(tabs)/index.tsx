@@ -28,7 +28,7 @@ function contactedToday(l: Lead) {
 }
 
 export default function Today() {
-  const { c, isDark, toggle } = useTheme();
+  const { c, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const { today, leads, drafts, streak, callsToday, isLiveMode, status, profile, moreToday, dealsFor } = useStore();
   const needsCrm = isLiveMode && status === 'ready' && !profile?.crm;
@@ -113,14 +113,6 @@ export default function Today() {
               {headline}
             </T>
           </View>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
-            onPress={toggle}
-            hitSlop={6}
-            style={({ pressed }) => ({ width: 44, height: 44, borderRadius: 22, marginRight: total ? 8 : 0, alignItems: 'center', justifyContent: 'center', backgroundColor: c.card, borderWidth: 1, borderColor: c.sep, opacity: pressed ? 0.7 : 1 })}>
-            <Icon name={isDark ? 'sun' : 'moon'} size={20} color={c.text} width={2} />
-          </Pressable>
           {total ? (
             <View style={{ width: 54, height: 54, borderRadius: 27, backgroundColor: ink, alignItems: 'center', justifyContent: 'center' }}>
               <T w="heavy" size={16} style={{ color: onInk }}>
