@@ -126,6 +126,10 @@ export type DraftContext = {
   history: string[]; // newest first, short lines
   voice?: string; // learned style notes, if any
   offer?: Offer | null;
+  /** Any stable number per lead+message (e.g. a hash of the lead id + step), so the closing question varies. */
+  variant?: number;
+  /** Today, for things like "early 2027". */
+  now?: Date;
 };
 
 /** A first name we can greet someone by, or null when the CRM has a handle like "rlpmontanez" or "jdog_23". */
@@ -136,6 +140,42 @@ export function greetableName(raw: string | undefined | null): string | null {
   if (!/[aeiouy]/i.test(n) || /^[^aeiouy]{4}/i.test(n)) return null; // "Rlpmontanez"
   if (/(.)\1\1/i.test(n)) return null; // "Sweetkenzzz"
   return n.charAt(0).toUpperCase() + n.slice(1);
+}
+
+/**
+ * The closing question, varied so every lead doesn't get the same ending.
+ * Each one is a style the model writes in its own words; it can't add facts.
+ */
+export function closingQuestion(touch: Touch, f: LeadFields, variant: number, now = new Date()): string {
+  const city = f.areas?.[0];
+  const soon = (() => {
+    const m = now.getMonth(); // 0-11
+    return m >= 9 ? `early ${now.getFullYear() + 1}` : m >= 6 ? 'before the end of the year' : 'this summer';
+  })();
+  const pool: string[] = [];
+  const tour = 'Invite them to text back if they want to see it in person (e.g. "Text me back if you want to walk through it this week.").';
+  const more = 'Ask if they want more homes like this one (e.g. "Want me to send you a few more like this?").';
+  const timing = `Ask about timing in a light way (e.g. "Are you thinking of making a move ${soon}?").`;
+  if (touch === 'home') {
+    pool.push('Ask a yes/no about seeing it (e.g. "Want to see it Saturday?").', tour, more);
+    if (!f.timeline) pool.push(timing);
+    if (city && (f.areas?.length ?? 0) === 1) pool.push(`Ask if they're only looking in ${city} (e.g. "Are you only looking in ${city}, or open to nearby?").`);
+  } else if (touch === 'teaser') {
+    pool.push(
+      'Ask if this area and price are in range, or where to look instead.',
+      'Ask which city they want if not this one (e.g. "Is this area on your list, or should I look somewhere else?").',
+      timing,
+      tour,
+      'Ask what price range feels comfortable (e.g. "Is this around your price, or should I aim higher or lower?").',
+    );
+  } else if (touch === 'community') {
+    pool.push('Ask if they want the floor plans.', tour, timing);
+  } else if (touch === 'offer') {
+    pool.push('Ask a yes/no to send the details.', timing, 'Ask which city they would want it in.');
+  } else {
+    return ''; // discovery: the plan already says what to ask
+  }
+  return pool[Math.abs(variant) % pool.length]!;
 }
 
 /** The instructions the model gets. Facts only from the record, one clear ask, never generic. */
@@ -171,6 +211,7 @@ export function nurturePrompt(c: DraftContext): string {
     offer: `HOOK: the most concrete part of the program (a dollar amount, a rate, a deadline) — only what the agent wrote. VALUE: what it means for them in plain words. CTA: an easy question that also tells us ${ask}, or a yes/no to send details.`,
     discovery: `There is nothing to share yet. HOOK: something specific we know about them (what they asked about, where they came from, how long they have been looking) or a sharp, curious question — never a greeting plus an introduction. VALUE: why answering helps them (e.g. you can send coming-soon homes before they hit Zillow). CTA: ask ${ask}, answerable in a few words.`,
   }[c.touch];
+  const closing = closingQuestion(c.touch, f, c.variant ?? c.step, c.now);
   const name = greetableName(c.lead.firstName);
   return `You are writing a ${c.channel} from ${c.agentName}, a real estate agent, to a lead. It has to earn a reply.
 
@@ -181,7 +222,7 @@ ${c.history.length ? c.history.map((h) => `- ${h}`).join('\n') : '- none'}
 ${home ? `\n${home}\n` : ''}${offer ? `\n${offer}\n` : ''}
 BUILD IT IN THREE BEATS — HOOK, VALUE, CTA
 ${plan}
-- The HOOK is the first line and the only line most people read. Under 12 words. Specific beats clever: a number, a status, a place, or something they told us. ${name ? `It can start with their name ("${name}, ...").` : ''}
+${closing ? `- For THIS message, end with this kind of question instead of the default: ${closing} Write it in your own words; it must still be about this lead and this home.\n` : ''}- The HOOK is the first line and the only line most people read. Under 12 words. Specific beats clever: a number, a status, a place, or something they told us. ${name ? `It can start with their name ("${name}, ...").` : ''}
 - Never open with "Hi ${name ?? 'there'}, it's ${c.agentName.split(' ')[0]}" or any greeting + who-I-am line. ${c.step === 0 ? `Say who you are AFTER the hook, in a few words ("${c.agentName.split(' ')[0]} here").` : 'Do not re-introduce yourself.'}
 - VALUE is one or two short lines. CTA is the last line: ONE question they can answer in a few words or with yes/no. If there is a link, it goes on its own line after the question.
 - Before writing, draft 3 different hooks and keep the most specific, most curiosity-driving one.

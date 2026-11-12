@@ -203,3 +203,11 @@ test('pipeline mirrors the CRM: real Lofty stage names, sensible order, done/dea
   assert.equal(p.classifyStage('Lender').kind, 'done');
   assert.equal(p.classifyStage('Sent to Lender').kind, 'active');
 });
+
+test('closing questions vary by lead', async () => {
+  const n = await import('../src/nurture.ts');
+  const seen = new Set([0, 1, 2, 3, 4].map((v) => n.closingQuestion('teaser', {}, v, new Date('2026-11-12'))));
+  assert.ok(seen.size >= 4);
+  assert.match(n.closingQuestion('teaser', {}, 2, new Date('2026-11-12')), /early 2027/);
+  assert.equal(n.closingQuestion('discovery', {}, 1), '');
+});

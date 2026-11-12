@@ -26,6 +26,7 @@ const NOTES_PER_RUN = 15;
 const LEADS_PER_RUN = 2; // overnight: a few leads every 15 minutes, so Lofty never sees a burst
 const MAX_DETAIL_LOOKUPS = 10; // per lead
 const LOFTY_GAP_MS = 1100; // space every Lofty call
+const PROMPT_V = 3; // bump when the writing rules change; older waiting messages get rewritten
 
 let lastLofty = 0;
 async function paced<T>(fn: () => Promise<T>): Promise<T> {
@@ -234,7 +235,7 @@ async function draftDue(s: Settings, limit: number, tz: string, quietEnd?: strin
     const sendAfter = s.mode === 'auto' ? nextDaytime(tz, quietEnd) : null;
     await db.from('drafts').insert({
       org_id: s.org_id, lead_id: leadId, user_id: s.user_id, channel, play: 'nurture',
-      subject: msg.subject ?? null, body: msg.body, why: msg.why, status: 'pending', home, send_after: sendAfter,
+      subject: msg.subject ?? null, body: msg.body, why: msg.why, status: 'pending', home, send_after: sendAfter, prompt_v: PROMPT_V,
       home_options: (touch === 'home' || touch === 'teaser') && options.length > 1 ? options : null,
     });
     await db.from('nurture_state').update({
@@ -477,8 +478,11 @@ async function askModel(prompt: string, s: Pick<Settings, 'org_id' | 'user_id'>,
 /** The message prompt for a lead, with its recent history (CRM notes included). */
 async function promptFor(lead: LeadRow, fields: LeadFields, o: { agentName: string; voice?: string; channel: 'text' | 'email'; step: number; touch: Touch; home: HomeCard | null; offer?: Offer | null }) {
   const { data: history } = await db.from('timeline_items').select('at, kind, title, body').eq('lead_id', lead.id).order('at', { ascending: false }).limit(6);
+  const variant = [...`${lead.id}:${o.step}`].reduce((a, ch) => (a * 31 + ch.charCodeAt(0)) >>> 0, 11);
   return nurturePrompt({
     ...o,
+    variant,
+    now: new Date(),
     lead: { firstName: lead.first_name, source: lead.source ?? undefined, stage: lead.stage, createdAt: lead.crm_created_at, lastContactAt: lead.last_contact_at, fields },
     history: (history ?? []).map((h) => `${String(h.at).slice(0, 10)} ${h.kind}: ${h.title}${h.body ? ` — ${String(h.body).slice(0, 240)}` : ''}`),
   });
@@ -605,7 +609,7 @@ async function rewrite(me: string, orgId: string, x: NonNullable<Awaited<ReturnT
   }
   const sentIds = ((st?.sent_home_ids ?? []) as string[]).filter((id) => id !== d.home?.id);
   await db.from('nurture_state').update({ sent_home_ids: home ? [...sentIds, home.id] : sentIds, updated_at: new Date().toISOString() }).eq('lead_id', lead.id);
-  const { data: updated } = await db.from('drafts').update({ body: msg.body, subject: msg.subject ?? d.subject, why: msg.why, home }).eq('id', d.id).select('*').single();
+  const { data: updated } = await db.from('drafts').update({ body: msg.body, subject: msg.subject ?? d.subject, why: msg.why, home, prompt_v: PROMPT_V }).eq('id', d.id).select('*').single();
   return json({ ok: true, draft: updated });
 }
 
@@ -654,24 +658,28 @@ async function homesFor(me: string, orgId: string, draftId: string, more: boolea
   return json({ ok: true, options });
 }
 
-/** Rewrite a few waiting messages that have no home with today's rules (a home, program or sharper question). */
+/** Rewrite waiting messages written with older rules (keeps their home, or finds one if they have none). */
 async function refreshPending(s: Settings, n: number) {
-  const { data: rows } = await db.from('drafts').select('id').eq('user_id', s.user_id).eq('play', 'nurture').eq('status', 'pending').is('home', null).is('send_after', null).order('created_at').limit(n);
+  const { data: rows } = await db.from('drafts').select('id').eq('user_id', s.user_id).eq('play', 'nurture').eq('status', 'pending').lt('prompt_v', PROMPT_V).is('send_after', null).order('created_at').limit(n);
   let done = 0;
   const cache = new Map<string, unknown>();
   for (const r of rows ?? []) {
     const x = await loadDraft(s.user_id, r.id as string);
     if (!x) continue;
-    const fields = (x.lead.fields ?? {}) as LeadFields;
-    const sent = new Set<string>((x.st?.sent_home_ids ?? []) as string[]);
-    const options = await homeOptions(x.lead, fields, sent, cache, s).catch(() => [] as HomeCard[]);
-    if (options.length > 1) {
-      await db.from('drafts').update({ home_options: options }).eq('id', x.d.id);
-      x.d.home_options = options;
+    let home = x.d.home;
+    if (!home) {
+      const fields = (x.lead.fields ?? {}) as LeadFields;
+      const sent = new Set<string>((x.st?.sent_home_ids ?? []) as string[]);
+      const options = await homeOptions(x.lead, fields, sent, cache, s).catch(() => [] as HomeCard[]);
+      if (options.length > 1) {
+        await db.from('drafts').update({ home_options: options }).eq('id', x.d.id);
+        x.d.home_options = options;
+      }
+      const step = Math.max(0, Number(x.st?.step ?? 1) - 1);
+      const touch = touchKind(fields, step, { home: options.length > 0, community: false, offer: !!pickOffer(s.offers, step) });
+      home = touch === 'home' || touch === 'teaser' ? options[0]! : null;
     }
-    const step = Math.max(0, Number(x.st?.step ?? 1) - 1);
-    const touch = touchKind(fields, step, { home: options.length > 0, community: false, offer: !!pickOffer(s.offers, step) });
-    const res = await rewrite(s.user_id, s.org_id, x, touch === 'home' || touch === 'teaser' ? options[0]! : null);
+    const res = await rewrite(s.user_id, s.org_id, x, home);
     if (res.status === 200) done++;
     else if (res.status === 500) break; // AI limit
   }
