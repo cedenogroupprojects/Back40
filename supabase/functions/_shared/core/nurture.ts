@@ -134,6 +134,7 @@ export function greetableName(raw: string | undefined | null): string | null {
   if (!n || n.length > 14 || /[\d_@.]/.test(n)) return null;
   if (n === n.toLowerCase() && n.length > 8) return null; // all-lowercase long strings are usually usernames
   if (!/[aeiouy]/i.test(n) || /^[^aeiouy]{4}/i.test(n)) return null; // "Rlpmontanez"
+  if (/(.)\1\1/i.test(n)) return null; // "Sweetkenzzz"
   return n.charAt(0).toUpperCase() + n.slice(1);
 }
 

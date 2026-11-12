@@ -377,7 +377,10 @@ async function homeOptions(lead: LeadRow, f: LeadFields, sent: Set<string>, cach
   // Same market search for every lead tonight: do it once per run, then skip what each lead already got.
   const key = `mkthomes:${s.user_id}`;
   if (!cache.has(key)) cache.set(key, await findListings(lead, { areas: m.areas, budgetMax: m.budgetMax }, new Set(), cache, s));
-  return (cache.get(key) as HomeCard[]).filter((h) => !sent.has(h.id));
+  const list = (cache.get(key) as HomeCard[]).filter((h) => !sent.has(h.id));
+  // Spread the market's homes across leads so everyone doesn't get the same one.
+  const k = [...lead.id].reduce((a, ch) => (a * 31 + ch.charCodeAt(0)) >>> 0, 7) % Math.max(1, list.length);
+  return [...list.slice(k), ...list.slice(0, k)];
 }
 
 /** The cities and price an agent's leads most often want (from their notes and CRM fields). */
