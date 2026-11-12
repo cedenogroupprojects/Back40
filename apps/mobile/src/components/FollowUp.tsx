@@ -243,13 +243,13 @@ export function FollowUpQueue({ inTab = false }: { inTab?: boolean }) {
             {editing ? (
               <TextInput value={body} onChangeText={setBody} multiline autoFocus accessibilityLabel="Edit message" style={{ ...font('medium'), fontSize: 15, color: c.text, backgroundColor: c.soft, borderRadius: 16, padding: 14, minHeight: 120, textAlignVertical: 'top' }} />
             ) : (
-              <View style={{ alignSelf: 'flex-end', maxWidth: '88%', backgroundColor: c.text, borderRadius: 18, borderBottomRightRadius: 5, paddingHorizontal: 13, paddingVertical: 9 }}>
+              <View style={{ alignSelf: 'flex-end', maxWidth: '88%', backgroundColor: c.hero, borderRadius: 18, borderBottomRightRadius: 5, paddingHorizontal: 13, paddingVertical: 9 }}>
                 {d.subject ? (
-                  <T w="semibold" size={15} style={{ color: c.bg }}>
+                  <T w="semibold" size={15} style={{ color: c.onHero }}>
                     {d.subject}
                   </T>
                 ) : null}
-                <T size={16} style={{ color: c.bg }}>
+                <T size={16} style={{ color: c.onHero }}>
                   {d.body}
                 </T>
               </View>

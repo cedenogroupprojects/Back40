@@ -28,7 +28,7 @@ function contactedToday(l: Lead) {
 }
 
 export default function Today() {
-  const { c, isDark } = useTheme();
+  const { c, isDark, toggle } = useTheme();
   const insets = useSafeAreaInsets();
   const { today, leads, drafts, streak, callsToday, isLiveMode, status, profile, moreToday, dealsFor } = useStore();
   const needsCrm = isLiveMode && status === 'ready' && !profile?.crm;
@@ -90,9 +90,9 @@ export default function Today() {
   );
   const rotate = x.interpolate({ inputRange: [-300, 0, 300], outputRange: ['-6deg', '0deg', '6deg'] });
 
-  const ink = c.text; // card color: navy on cream, cream on navy
-  const onInk = c.bg;
-  const veil = isDark ? 'rgba(15,26,46,0.07)' : 'rgba(246,241,231,0.08)';
+  const ink = c.hero; // powder blue on black, black on pale blue
+  const onInk = c.onHero;
+  const veil = isDark ? 'rgba(8,4,2,0.07)' : 'rgba(182,223,245,0.10)';
   const subInk = { color: onInk, opacity: 0.68 };
 
   const first = cur?.lead.firstName || 'them';
@@ -113,6 +113,14 @@ export default function Today() {
               {headline}
             </T>
           </View>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+            onPress={toggle}
+            hitSlop={6}
+            style={({ pressed }) => ({ width: 44, height: 44, borderRadius: 22, marginRight: total ? 8 : 0, alignItems: 'center', justifyContent: 'center', backgroundColor: c.card, borderWidth: 1, borderColor: c.sep, opacity: pressed ? 0.7 : 1 })}>
+            <Icon name={isDark ? 'sun' : 'moon'} size={20} color={c.text} width={2} />
+          </Pressable>
           {total ? (
             <View style={{ width: 54, height: 54, borderRadius: 27, backgroundColor: ink, alignItems: 'center', justifyContent: 'center' }}>
               <T w="heavy" size={16} style={{ color: onInk }}>
@@ -188,7 +196,7 @@ export default function Today() {
         <View style={{ flex: 1, marginHorizontal: 16, marginTop: 18 }}>
           {/* The stack behind */}
           {total - i > 2 ? <View style={{ position: 'absolute', left: 18, right: 18, top: 22, bottom: 96, borderRadius: 28, backgroundColor: c.sep }} /> : null}
-          {total - i > 1 ? <View style={{ position: 'absolute', left: 9, right: 9, top: 11, bottom: 108, borderRadius: 28, backgroundColor: c.cool, opacity: isDark ? 0.5 : 0.85 }} /> : null}
+          {total - i > 1 ? <View style={{ position: 'absolute', left: 9, right: 9, top: 11, bottom: 108, borderRadius: 28, backgroundColor: isDark ? '#5E7889' : '#5A5654' }} /> : null}
 
           <Animated.View {...pan.panHandlers} style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 120, transform: [{ translateX: x }, { rotate }] }}>
             <Pressable
@@ -222,7 +230,7 @@ export default function Today() {
               </T>
               {cur.lead.aiOpener ? (
                 <View style={{ backgroundColor: veil, borderRadius: 16, padding: 14, gap: 4 }}>
-                  <T w="bold" size={11} style={{ color: c.accent, letterSpacing: 0.8 }}>
+                  <T w="bold" size={11} style={{ color: c.heroAccent, letterSpacing: 0.8 }}>
                     OPEN WITH
                   </T>
                   <T size={15} numberOfLines={3} style={{ color: onInk, opacity: 0.9 }}>
@@ -305,8 +313,8 @@ function RoundButton({ icon, label, onPress, solid, disabled }: { icon: 'back' |
       accessibilityLabel={label}
       disabled={disabled}
       onPress={onPress}
-      style={({ pressed }) => ({ width: 60, height: 60, borderRadius: 30, alignItems: 'center', justifyContent: 'center', backgroundColor: solid ? c.text : c.card, borderWidth: solid ? 0 : 1.5, borderColor: c.sep, opacity: disabled ? 0.35 : pressed ? 0.7 : 1 })}>
-      <Icon name={icon} size={22} color={solid ? c.bg : c.text} width={2.2} />
+      style={({ pressed }) => ({ width: 60, height: 60, borderRadius: 30, alignItems: 'center', justifyContent: 'center', backgroundColor: solid ? c.hero : c.card, borderWidth: solid ? 0 : 1.5, borderColor: c.sep, opacity: disabled ? 0.35 : pressed ? 0.7 : 1 })}>
+      <Icon name={icon} size={22} color={solid ? c.onHero : c.text} width={2.2} />
     </Pressable>
   );
 }

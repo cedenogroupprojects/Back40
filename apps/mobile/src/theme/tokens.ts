@@ -1,8 +1,9 @@
 // Design tokens. Direction "A + C" (Nov 8): looks like a native iPhone app —
 // grouped lists, thin separators, status dots, standard tab bar — with the
 // density of a pro tool (filters, one-line context, time since activity).
-// Brand colors (Nov 10): navy, cream, pops of burnt orange. Light = cream with navy
-// text; dark = navy with cream text. Burnt orange is the accent in both.
+// Brand colors (Nov 11): Back 40's own look — raven black, powder blue, poppy red.
+// Dark = raven black with a powder-blue hero card; light = pale powder blue with a
+// raven-black hero card. Poppy red is only for actions and alerts (Call, Send, badges).
 import { Platform } from 'react-native';
 
 export type Palette = {
@@ -15,6 +16,11 @@ export type Palette = {
   track: string;
   sep: string;
   accent: string;
+  /** The big Today card and message bubbles. */
+  hero: string;
+  onHero: string;
+  /** Small labels on the hero card ("OPEN WITH"). */
+  heroAccent: string;
   onAccent: string;
   accentText: string;
   hotSoft: string;
@@ -32,54 +38,60 @@ export type Palette = {
 };
 
 export const light: Palette = {
-  bg: '#F6F1E7', // cream
-  card: '#FFFCF7',
-  text: '#14213D', // navy
-  sub: '#7A8194',
-  body: '#34405A',
-  soft: '#EDE6D8',
-  track: '#E6DECF',
-  sep: '#DCD3C3',
-  accent: '#B5521F', // burnt orange
+  bg: '#EAF5FC', // pale powder blue
+  card: '#FFFFFF',
+  text: '#080402', // raven black
+  sub: '#5D6E7A',
+  body: '#2A3138',
+  soft: '#DCEDF7',
+  track: '#CFE3EF',
+  sep: '#C9DEEA',
+  accent: '#E0091F', // poppy red
+  hero: '#080402',
+  onHero: '#F4F7FA',
+  heroAccent: '#FF4D5E',
   onAccent: '#FFFFFF',
-  accentText: '#A2481A',
-  hotSoft: '#F6E3D6',
-  good: '#2F8A5A',
-  goodSoft: '#E2EFE5',
-  cool: '#2E4A7D',
-  coolSoft: '#E2E7F1',
-  warm: '#C98A2E',
-  nav: 'rgba(250,246,238,0.96)',
+  accentText: '#C40719',
+  hotSoft: '#FBE1E3',
+  good: '#1E8A55',
+  goodSoft: '#DDF1E6',
+  cool: '#2C6E96',
+  coolSoft: '#D6EAF6',
+  warm: '#B87800', // amber, for "held" warnings
+  nav: 'rgba(255,255,255,0.97)',
   navOnBg: 'transparent',
-  navOnIcon: '#14213D',
-  navOff: '#9097A6',
-  dim: 'rgba(20,33,61,0.4)',
+  navOnIcon: '#080402',
+  navOff: '#7A8A95',
+  dim: 'rgba(8,4,2,0.45)',
   shadow: false,
 };
 
 export const dark: Palette = {
-  bg: '#0F1A2E', // navy
-  card: '#172440',
-  text: '#F6F1E7', // cream
-  sub: '#8E98AD',
-  body: '#C7CDD8',
-  soft: '#1F2D4A',
-  track: '#283958',
-  sep: '#24324F',
-  accent: '#E07A43', // burnt orange
-  onAccent: '#0F1A2E',
-  accentText: '#EC9161',
-  hotSoft: '#3A2A22',
-  good: '#6CC596',
-  goodSoft: '#16302A',
-  cool: '#93B2E8',
-  coolSoft: '#1C2B49',
-  warm: '#E3B36A',
-  nav: 'rgba(15,26,46,0.96)',
+  bg: '#080402', // raven black
+  card: '#14100E',
+  text: '#F4F7FA',
+  sub: '#8C8F96',
+  body: '#C9CCD1',
+  soft: '#1C1816',
+  track: '#2A2624',
+  sep: '#2A2624',
+  accent: '#E0091F', // poppy red
+  hero: '#B6DFF5', // powder blue
+  onHero: '#080402',
+  heroAccent: '#B00718',
+  onAccent: '#FFFFFF',
+  accentText: '#FF4D5E',
+  hotSoft: '#2E0D10',
+  good: '#4FD18B',
+  goodSoft: '#0F2A1C',
+  cool: '#B6DFF5',
+  coolSoft: '#16242C',
+  warm: '#FFB020', // amber, for "held" warnings
+  nav: 'rgba(8,4,2,0.97)',
   navOnBg: 'transparent',
-  navOnIcon: '#E07A43',
-  navOff: '#6F7A93',
-  dim: 'rgba(5,10,20,0.6)',
+  navOnIcon: '#B6DFF5',
+  navOff: '#6B6E75',
+  dim: 'rgba(0,0,0,0.65)',
   shadow: false,
 };
 
