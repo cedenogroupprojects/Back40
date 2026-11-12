@@ -267,7 +267,8 @@ async function findListings(lead: LeadRow, f: LeadFields, sent: Set<string>, cac
   }
   const creds = cache.get(lead.connection_id) as Awaited<ReturnType<typeof credentialsFor>> | null;
   if (!creds) return [];
-  const q = { cities: f.areas, priceMin: f.budgetMin, priceMax: f.budgetMax, bedsMin: f.bedsMin, bathsMin: f.bathsMin, sqftMin: f.sqftMin, lotMinSqft: f.lotMinSqft, singleStory: f.singleStory };
+  // No floor given? Skip homes far under budget (mobile-home spaces, land, fixer shells).
+  const q = { cities: f.areas, priceMin: f.budgetMin ?? (f.budgetMax ? Math.round(f.budgetMax * 0.55) : undefined), priceMax: f.budgetMax, bedsMin: f.bedsMin, bathsMin: f.bathsMin, sqftMin: f.sqftMin, lotMinSqft: f.lotMinSqft, singleStory: f.singleStory };
   const kinds = Object.keys(DEAL_SEARCHES) as DealKind[];
   const lists: HomeCard[][] = [];
   for (const k of kinds) {

@@ -154,7 +154,7 @@ export function nurturePrompt(c: DraftContext): string {
     f.preApproved ? 'Pre-approved: yes' : null,
   ].filter(Boolean);
   const homeLine = (h: HomeCard) =>
-    `${h.title}${h.city ? `, ${h.city}` : ''}${h.price ? ` — $${h.price.toLocaleString('en-US')}` : ''}${h.beds ? `, ${h.beds} bd` : ''}${h.baths ? `/${h.baths} ba` : ''}${h.sqft ? `, ${h.sqft.toLocaleString('en-US')} sqft` : ''}${h.lotSqft && h.lotSqft >= 7000 ? `, ${h.lotSqft.toLocaleString('en-US')} sqft lot` : ''}${h.facts?.length ? `. VERIFIED FROM THE MLS LISTING (you may mention these, nothing else about the home): ${h.facts.map((x) => `"${x}"`).join('; ')}` : ''}${h.badge ? `. ${{ coming_soon: 'COMING SOON: not on the open market yet', new: `NEW LISTING: on the market ${h.daysOnMarket ?? 'a few'} days`, price_drop: 'PRICE JUST DROPPED' }[h.badge]}` : ''}${h.url ? `. Link: ${h.url}` : ''}`;
+    `${h.title}${h.city ? `, ${h.city}` : ''}${h.price ? ` — $${h.price.toLocaleString('en-US')}` : ''}${h.beds ? `, ${h.beds} bd` : ''}${h.baths ? `/${h.baths} ba` : ''}${h.sqft ? `, ${h.sqft.toLocaleString('en-US')} sqft` : ''}${h.lotSqft && h.lotSqft >= 7000 ? `, ${h.lotSqft.toLocaleString('en-US')} sqft lot` : ''}${h.facts?.length ? `. VERIFIED FROM THE MLS LISTING (you may mention these, nothing else about the home): ${h.facts.map((x) => `"${x}"`).join('; ')}` : ''}${h.badge ? `. ${{ coming_soon: 'COMING SOON: not on the open market yet', new: h.daysOnMarket === 0 ? 'NEW LISTING: listed today' : `NEW LISTING: on the market ${h.daysOnMarket ?? 'a few'} days`, price_drop: 'PRICE JUST DROPPED' }[h.badge]}` : ''}${h.url ? `. Link: ${h.url}` : ''}`;
   const home = c.home
     ? c.home.kind === 'listing'
       ? c.touch === 'teaser'
