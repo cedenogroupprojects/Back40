@@ -178,6 +178,31 @@ export function closingQuestion(touch: Touch, f: LeadFields, variant: number, no
   return pool[Math.abs(variant) % pool.length]!;
 }
 
+/**
+ * How the text opens, varied so no two leads get the same template.
+ * Each is a direction, written fresh by the model; none may add facts.
+ */
+export function openingAngle(touch: Touch, variant: number): string {
+  if (touch === 'discovery') return '';
+  const angles = [
+    'Open with a short question about what they want that this home answers (e.g. "Still hoping for a pool?" or "Would a bigger lot be a dealbreaker?"), then the home.',
+    'Open like a heads-up between friends, before the details (e.g. "This just popped up and I thought of you." / "Quick heads up on one in Corona.").',
+    'Open with the single best thing about the home, not the bed count (e.g. "Heated pool and a downstairs bedroom in Ontario.").',
+    'Open with the place and the status in a natural sentence, then why it is worth a look (e.g. "Something in Corona just came up that won\'t last long.").',
+    'Open with their name and a short, casual line, then get to the home (e.g. "Hey Maria, quick one for you.").',
+    'Open with the price as the hook, said the way people talk (e.g. "Under $500K in Fontana, on a 7,500 sqft lot.").',
+  ];
+  return angles[Math.abs(Math.floor(variant / 7)) % angles.length]!;
+}
+
+/** How the agent says who they are, using where the lead came from when we know it. */
+export function introLine(agentName: string, source?: string): string {
+  const first = agentName.split(' ')[0] || agentName;
+  const s = (source ?? '').toLowerCase();
+  const from = /instagram|\big\b|ig messenger|insta/.test(s) ? ' from IG' : /facebook|\bfb\b|meta/.test(s) ? ' from Facebook' : /tiktok/.test(s) ? ' from TikTok' : /youtube/.test(s) ? ' from YouTube' : '';
+  return `This is ${first}, the Realtor${from}`;
+}
+
 /** The instructions the model gets. Facts only from the record, one clear ask, never generic. */
 export function nurturePrompt(c: DraftContext): string {
   const f = c.lead.fields;
@@ -212,6 +237,8 @@ export function nurturePrompt(c: DraftContext): string {
     discovery: `There is nothing to share yet. HOOK: something specific we know about them (what they asked about, where they came from, how long they have been looking) or a sharp, curious question — never a greeting plus an introduction. VALUE: why answering helps them (e.g. you can send coming-soon homes before they hit Zillow). CTA: ask ${ask}, answerable in a few words.`,
   }[c.touch];
   const closing = closingQuestion(c.touch, f, c.variant ?? c.step, c.now);
+  const opening = openingAngle(c.touch, c.variant ?? c.step);
+  const intro = introLine(c.agentName, c.lead.source);
   const name = greetableName(c.lead.firstName);
   return `You are writing a ${c.channel} from ${c.agentName}, a real estate agent, to a lead. It has to earn a reply.
 
@@ -222,19 +249,25 @@ ${c.history.length ? c.history.map((h) => `- ${h}`).join('\n') : '- none'}
 ${home ? `\n${home}\n` : ''}${offer ? `\n${offer}\n` : ''}
 BUILD IT IN THREE BEATS — HOOK, VALUE, CTA
 ${plan}
-${closing ? `- For THIS message, end with this kind of question instead of the default: ${closing} Write it in your own words; it must still be about this lead and this home.\n` : ''}- The HOOK is the first line and the only line most people read. Under 12 words. Specific beats clever: a number, a status, a place, or something they told us. ${name ? `It can start with their name ("${name}, ...").` : ''}
-- Never open with "Hi ${name ?? 'there'}, it's ${c.agentName.split(' ')[0]}" or any greeting + who-I-am line. ${c.step === 0 ? `Say who you are AFTER the hook, in a few words ("${c.agentName.split(' ')[0]} here").` : 'Do not re-introduce yourself.'}
+${opening ? `- For THIS message, open this way: ${opening}\n` : ''}${closing ? `- End with this kind of question: ${closing} Write it in your own words; it must still be about this lead and this home.\n` : ''}- The HOOK is the first line and the only line most people read. Under 12 words. Specific beats generic.
+- Do NOT use the template "Name, a [city] [beds] [baths] [price]". Never list specs like a listing sheet ("3 bd/3 ba, 1,671 sqft"). Mention at most ONE number besides the price, only if it matters (a big lot, a 4th bedroom).
+- Only mention features a buyer would brag about to a friend: pool, spa, ADU or casita, big lot, RV parking, view, single story, downstairs bedroom, new build, no HOA, solar. Never mention utilities or finishes: water heaters, HVAC, sinks, flooring, laminate, paint, appliances, washer/dryer.
+- ${c.step === 0 ? `Say who you are once, after the hook, as "${intro}" (you can shorten it, e.g. "${intro.replace('This is ', '')}"). Never write "${c.agentName.split(' ')[0]} here".` : `Do not introduce yourself again and never write "${c.agentName.split(' ')[0]} here".`}
+- Never open with "Hi ${name ?? 'there'}, it's ${c.agentName.split(' ')[0]}" or a greeting + who-I-am line.
 - VALUE is one or two short lines. CTA is the last line: ONE question they can answer in a few words or with yes/no. If there is a link, it goes on its own line after the question.
-- Before writing, draft 3 different hooks and keep the most specific, most curiosity-driving one.
+- Only say a home is "not on Zillow", "not on the market yet" or "before it lists" when it is COMING SOON.
+- Make them FEEL it: excitement and a little fear of missing out, like a friend who found them a deal they'd kick themselves for passing on. Do it with energy and word choice ("this one's special", "I'd hate for you to miss this", "this is the one I'd jump on"), not with hype words or exclamation points everywhere. One exclamation point max.
+- The urgency must stay honest: never claim multiple offers, other buyers, showings booked, a price going up, or a deadline unless it is written above. "It's going to go fast" style opinions are fine; invented facts are not.
+- Write it the way a real agent texts: short sentences, contractions, a little personality. Vary the rhythm; it should not read like a form.
 
 SHAPE ONLY — never reuse these facts:
-weak: "Hi Ernesto, it's Jeffry, a real estate agent. You reached out a while back. What city are you hoping to buy in?"
-strong: "Ernesto, a 4 bed in Fontana just went coming soon at $579K. Jeffry here, you messaged us a while back. Is Fontana on your list, or should I look somewhere else?"
-strong: "Maria, that Rialto 3 bed just dropped $15K. Now $524,900, single story, no HOA. Want to see it Saturday?"
+weak (template, spec dump): "Chris, a Corona 2 bed, 3 bath is coming soon at $584,900. It's 1,671 sqft. Is Corona in range?"
+strong: "Still hoping for a pool? This one in Ontario is the one I'd jump on. Coming soon at $925K, with a bedroom downstairs. ${intro.replace('This is ', '')}, by the way. Want to see it before it lists?"
+strong: "Under $500K in Fontana on a 7,500 sqft lot. It listed today and I'd hate for you to miss it. Text me back if you want to walk it this week."
 
 RULES
 - Sound like a real person texting from their phone. ${c.channel === 'text' ? 'Max 320 characters before the link. No emojis unless natural. No links other than the one given.' : 'Max 90 words. Plain text, no formatting.'}
-- Never: "just checking in", "touching base", "hope this finds you well", "hope you're doing well", "I wanted to reach out", "let me know if you have any questions", exclamation-mark hype, or anything that reads like a mass message.
+- Never: "just checking in", "touching base", "hope this finds you well", "hope you're doing well", "I wanted to reach out", "let me know if you have any questions", stacked exclamation points, or anything that reads like a mass message.
 - Only use facts above. Never invent prices, homes, addresses, rates, programs, dates or promises. About a home, say only the numbers given and the VERIFIED MLS phrases; never add features, adjectives about the yard, views, condition or upgrades that are not written there.
 - Never show the lead our internal labels: no CRM stage names ("Sent to Lender", "Contacted"), campaign or source codes (e.g. "NB4Y", "IG Messenger", "text code"), tags or scores. You may say "Instagram" or "Facebook" only if the source plainly says so.
 - Fair housing: never describe a place by who lives there; no schools-as-demographics, no "family neighborhood" style steering.
@@ -338,7 +371,7 @@ EXTERIOR: ${listing.exterior.slice(0, 300)}
 
 1. For each required feature, answer true ONLY if the listing text clearly says the home has it. Not mentioned, unclear, "could add", "room for" or "potential" = false.
 Required: ${must.length ? must.map((m) => `"${m}"`).join(', ') : '(none)'}
-2. Copy up to 3 short phrases (3-8 words) WORD FOR WORD from the listing text that a buyer who wants ${wants.length ? wants.join(', ') : 'a good home'} would care about. Exact substrings only; no rewording.
+2. Copy up to 3 short phrases (3-8 words) WORD FOR WORD from the listing text that a buyer who wants ${wants.length ? wants.join(', ') : 'a good home'} would get excited about (a pool, an ADU, a view, a big yard, a downstairs bedroom, upgrades they can see). Never pick mechanical or utility items (water heater, HVAC, plumbing, sinks, flooring, paint). Exact substrings only; no rewording.
 Return JSON only: {"has": {"<feature>": true}, "quotes": ["..."]}`;
 }
 

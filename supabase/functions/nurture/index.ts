@@ -26,7 +26,7 @@ const NOTES_PER_RUN = 15;
 const LEADS_PER_RUN = 2; // overnight: a few leads every 15 minutes, so Lofty never sees a burst
 const MAX_DETAIL_LOOKUPS = 10; // per lead
 const LOFTY_GAP_MS = 1100; // space every Lofty call
-const PROMPT_V = 3; // bump when the writing rules change; older waiting messages get rewritten
+const PROMPT_V = 5; // bump when the writing rules change; older waiting messages get rewritten
 
 let lastLofty = 0;
 async function paced<T>(fn: () => Promise<T>): Promise<T> {
