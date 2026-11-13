@@ -26,7 +26,7 @@ const NOTES_PER_RUN = 15;
 const LEADS_PER_RUN = 2; // overnight: a few leads every 15 minutes, so Lofty never sees a burst
 const MAX_DETAIL_LOOKUPS = 10; // per lead
 const LOFTY_GAP_MS = 1100; // space every Lofty call
-const PROMPT_V = 5; // bump when the writing rules change; older waiting messages get rewritten
+const PROMPT_V = 6; // bump when the writing rules change; older waiting messages get rewritten
 
 let lastLofty = 0;
 async function paced<T>(fn: () => Promise<T>): Promise<T> {
@@ -468,7 +468,7 @@ async function askModel(prompt: string, s: Pick<Settings, 'org_id' | 'user_id'>,
   const blocks = (out.content ?? []) as { type?: string; text?: string }[];
   const text = blocks.filter((b) => b.type === 'text' && typeof b.text === 'string').map((b) => b.text).join('\n');
   try {
-    return JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1));
+    return firstJson(text);
   } catch (e) {
     console.error('model reply not JSON', model, out.stop_reason, blocks.map((b) => b.type).join(','), text.slice(0, 160));
     throw e;
@@ -681,9 +681,27 @@ async function refreshPending(s: Settings, n: number) {
     }
     const res = await rewrite(s.user_id, s.org_id, x, home);
     if (res.status === 200) done++;
-    else if (res.status === 500) break; // AI limit
+    else if (res.status === 500 && (await res.clone().text()).includes('limit')) break; // AI limit
   }
   return done;
+}
+
+// The model sometimes returns two JSON objects (e.g. alternatives). Take the first complete one.
+function firstJson(text: string): Record<string, unknown> {
+  const start = text.indexOf('{');
+  if (start < 0) throw new SyntaxError('no JSON object');
+  let depth = 0, inStr = false, esc = false;
+  for (let i = start; i < text.length; i++) {
+    const ch = text[i];
+    if (inStr) {
+      if (esc) esc = false;
+      else if (ch === '\\') esc = true;
+      else if (ch === '"') inStr = false;
+    } else if (ch === '"') inStr = true;
+    else if (ch === '{') depth++;
+    else if (ch === '}' && --depth === 0) return JSON.parse(text.slice(start, i + 1));
+  }
+  throw new SyntaxError('unterminated JSON object');
 }
 
 /** Auto mode: send drafts whose time has come, through the CRM, logged like any message. */

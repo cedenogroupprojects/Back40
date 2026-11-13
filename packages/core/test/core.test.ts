@@ -208,14 +208,14 @@ test('closing questions vary by lead', async () => {
   const n = await import('../src/nurture.ts');
   const seen = new Set([0, 1, 2, 3, 4].map((v) => n.closingQuestion('teaser', {}, v, new Date('2026-11-12'))));
   assert.ok(seen.size >= 4);
-  assert.match(n.closingQuestion('teaser', {}, 2, new Date('2026-11-12')), /early 2027/);
+  assert.match(n.closingQuestion('teaser', {}, 4, new Date('2026-11-12')), /early 2027/);
   assert.equal(n.closingQuestion('discovery', {}, 1), '');
 });
 
 test('intro uses the lead source; openers vary', async () => {
   const n = await import('../src/nurture.ts');
-  assert.equal(n.introLine('Jeffry Giordano', 'IG Messenger'), 'This is Jeffry, the Realtor from IG');
-  assert.equal(n.introLine('Jeffry Giordano', 'Website'), 'This is Jeffry, the Realtor');
+  assert.equal(n.introLine('Jeffry Giordano', 'IG Messenger'), "It's Jeffry from IG");
+  assert.equal(n.introLine('Jeffry Giordano', 'Website'), "It's Jeffry");
   const seen = new Set([0, 7, 14, 21, 28, 35].map((v) => n.openingAngle('teaser', v)));
   assert.equal(seen.size, 6);
 });
