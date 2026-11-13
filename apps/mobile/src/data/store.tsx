@@ -3,6 +3,7 @@
 // - live: signed in to Back 40; leads come from the database (synced from the
 //   CRM) and every edit goes through the server, which writes it to the CRM.
 // Screens only talk to this store, so they don't care which mode is on.
+import { AppState } from 'react-native';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   DEFAULT_RULES,
@@ -217,9 +218,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (t) clearTimeout(t);
       t = setTimeout(() => void reload(), 1500);
     });
+    // Coming back to the app (or a dropped live connection) never leaves a stale list.
+    const app = AppState.addEventListener('change', (s) => s === 'active' && void reload());
     return () => {
       if (t) clearTimeout(t);
       unsub();
+      app.remove();
     };
   }, [status, reload]);
 

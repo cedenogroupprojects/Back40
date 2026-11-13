@@ -3,7 +3,7 @@
 // "Your 10 are done" with stats, "Give me 5 more" and the follow-ups to approve.
 import { router } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Image, PanResponder, Pressable, View } from 'react-native';
+import { Animated, AppState, Image, PanResponder, Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BADGE_TEXT, type HomeCard, type Lead, type RankedLead } from '@back40/core';
@@ -23,6 +23,19 @@ function wants(l: Lead) {
   return [f.areas?.slice(0, 2).join(' / '), f.budgetMax ? `up to ${money(f.budgetMax)}` : null, f.bedsMin ? `${f.bedsMin}+ bd` : null].filter(Boolean).join(' · ');
 }
 
+// Which list is current: the morning one (from 7 AM) or the afternoon one (from 1 PM).
+const AFTERNOON_HOUR = 13;
+function listSlot(d = new Date()) {
+  const h = d.getHours();
+  // Before 7 AM still counts as yesterday afternoon's list.
+  if (h < 7) {
+    const y = new Date(d);
+    y.setDate(d.getDate() - 1);
+    return `${y.toDateString()} pm`;
+  }
+  return `${d.toDateString()} ${h >= AFTERNOON_HOUR ? 'pm' : 'am'}`;
+}
+
 function contactedToday(l: Lead) {
   return !!l.lastContactAt && new Date(l.lastContactAt).toDateString() === new Date().toDateString();
 }
@@ -40,6 +53,26 @@ export default function Today() {
   const [i, setI] = useState(0);
   const iRef = useRef(0);
   iRef.current = i;
+  // Two fresh lists a day: the morning list, and a new one at 1 PM. At each one
+  // the deck is rebuilt from scratch, so leads you didn't get to are re-ranked
+  // against whoever came in since.
+  const [slot, setSlot] = useState(listSlot);
+  useEffect(() => {
+    const check = () => setSlot(listSlot());
+    const timer = setInterval(check, 60_000);
+    const sub = AppState.addEventListener('change', (s) => s === 'active' && check());
+    return () => {
+      clearInterval(timer);
+      sub.remove();
+    };
+  }, []);
+  const slotRef = useRef(slot);
+  useEffect(() => {
+    if (slotRef.current === slot) return;
+    slotRef.current = slot;
+    setDeckIds(today.map((r) => r.lead.id));
+    setI(0);
+  }, [slot, today]);
   useEffect(() => {
     setDeckIds((ids) => {
       const add = today.map((r) => r.lead.id).filter((id) => !ids.includes(id));
