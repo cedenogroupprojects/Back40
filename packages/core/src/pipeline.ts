@@ -35,6 +35,8 @@ export function classifyStage(name: string): StageInfo {
   if (/(showing|looking|tour|active buyer|searching|house hunting)/.test(s)) return { phase: 5, kind: 'active', hot: true };
   if (/(lender|pre-?qual|pre-?approv|financ|loan)/.test(s)) return { phase: 4, kind: 'active', hot: true };
   if (/(appoint|scheduled|consult|meeting|\bmet\b)/.test(s)) return { phase: 3, kind: 'active', hot: true };
+  // Follow Up Boss "Hot Prospect", GoHighLevel "Hot Lead"/"Active Client" style names.
+  if (/(\bhot\b|active client|active buyer)/.test(s)) return { phase: 3, kind: 'active', hot: true };
   if (/(nurtur|long[- ]term|drip|future|watch)/.test(s)) return { phase: 2.5, kind: 'active', hot: false };
   if (/(attempt|no answer|unresponsive|voicemail|left vm)/.test(s)) return { phase: 1, kind: 'active', hot: false };
   if (/(contact|engaged|talking|responded|spoke|warm|qualified)/.test(s)) return { phase: 2, kind: 'active', hot: false };

@@ -219,3 +219,20 @@ test('intro uses the lead source; openers vary', async () => {
   const seen = new Set([0, 7, 14, 21, 28, 35].map((v) => n.openingAngle('teaser', v)));
   assert.equal(seen.size, 6);
 });
+
+test('hot stages work out of the box for any CRM naming', () => {
+  const hot = (stage: string) => labelFor(lead({ id: stage, stage, lastContactAt: hoursAgo(1), signals: [{ kind: 'listing_view', at: hoursAgo(2) }] }), DEFAULT_RULES, NOW) === 'hot_now';
+  // Lofty, Follow Up Boss, GoHighLevel style names
+  for (const s of ['New Leads', 'Pre-Approved', 'Hot Prospect', 'Showing Homes', 'Appointment Set', 'Submitting Offers']) assert.ok(hot(s), s);
+  for (const s of ['Contacted', 'Nurture', 'Closed', 'Trash']) assert.ok(!hot(s), s);
+  // A team's own pick wins, and "New Lead" matches "New Leads".
+  const rules = { ...DEFAULT_RULES, hotStages: ['New Lead'] };
+  assert.ok(labelFor(lead({ id: 'n', stage: 'New Leads', lastContactAt: hoursAgo(1), signals: [{ kind: 'listing_view', at: hoursAgo(2) }] }), rules, NOW) === 'hot_now');
+});
+
+test("a CRM's instant auto-text doesn't count as contacting a new lead", () => {
+  const created = hoursAgo(3);
+  const auto = new Date(Date.parse(created) + 6_000).toISOString();
+  assert.equal(labelFor(lead({ id: 'a', stage: 'New Leads', createdAt: created, lastContactAt: auto }), DEFAULT_RULES, NOW), 'brand_new');
+  assert.notEqual(labelFor(lead({ id: 'b', stage: 'New Leads', createdAt: created, lastContactAt: hoursAgo(1) }), DEFAULT_RULES, NOW), 'brand_new');
+});

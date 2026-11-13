@@ -18,7 +18,9 @@ const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
 
 export const DEFAULT_RULES: HotRules = {
-  hotStages: ['New Lead', 'Pre-Approved', 'Actively Looking', 'Submitting Offers'],
+  // Empty = automatic: any CRM's stage names are read for intent ("New Leads",
+  // "Hot Prospect", "Showing Homes", "Pre-Qualified"…). A team can pick its own.
+  hotStages: [],
   goingColdDays: 2,
   cap: 10,
 };
@@ -44,6 +46,7 @@ export function isBrandNew(lead: Lead, now: number): boolean {
 const stageKey = (s: string) => s.toLowerCase().trim().replace(/s$/, '');
 
 export function isHotStage(lead: Lead, rules: HotRules): boolean {
+  if (!rules.hotStages.length) return classifyStage(lead.stage).hot;
   const s = stageKey(lead.stage);
   return rules.hotStages.some((h) => stageKey(h) === s);
 }
