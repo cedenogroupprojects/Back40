@@ -18,6 +18,8 @@ import { font } from '@/theme/tokens';
 const HELP: Partial<Record<CrmKind, string>> = {
   lofty: 'In Lofty: Settings → Integrations → API Keys → Create API Key. Name it Back 40, copy it and paste it here.',
   followupboss: 'In Follow Up Boss: Admin → API → Create API key. Copy it and paste it here.',
+  gohighlevel:
+    'In GoHighLevel (or Jtek, or any HighLevel CRM): open your sub-account → Settings → Private Integrations → Create New Integration. Give it Contacts, Conversations, Conversation Messages, Users, Locations and Opportunities access. Copy the token and paste it here.',
 };
 
 export default function Connect() {
@@ -25,6 +27,8 @@ export default function Connect() {
   const { status, profile, reload, signOut } = useStore();
   const [kind, setKind] = useState<CrmKind>('lofty');
   const [key, setKey] = useState('');
+  const [account, setAccount] = useState('');
+  const needsAccount = kind === 'gohighlevel';
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<{ imported: number; mine: number; matchedYou: boolean; more: boolean } | null>(null);
@@ -58,9 +62,10 @@ export default function Connect() {
     setError(null);
     setBusy(true);
     try {
-      const r = await connectCrm(kind, key.trim());
+      const r = await connectCrm(kind, key.trim(), needsAccount ? account.trim() : undefined);
       setDone({ imported: r.imported, mine: r.mine ?? 0, matchedYou: r.matchedYou ?? false, more: r.more });
       setKey('');
+      setAccount('');
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -100,7 +105,7 @@ export default function Connect() {
           <>
             <List>
               <ListRow label={CRM_NAME[connected.kind]} value={connected.status === 'active' ? 'Connected' : 'Needs a new key'} valueTone={connected.status === 'active' ? c.good : c.accentText} sub={connected.lastSyncedAt ? `Last synced ${new Date(connected.lastSyncedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}` : undefined} />
-              {isAgent ? null : <ListRow label="Use a different API key" onPress={() => setReplacing(true)} />}
+              {isAgent ? null : <ListRow label="Connect another CRM or key" onPress={() => setReplacing(true)} />}
             </List>
             {isAgent ? null : (
               <>
@@ -129,18 +134,17 @@ export default function Connect() {
           <>
             <SectionLabel>Your CRM</SectionLabel>
             <List>
-              {(['lofty', 'followupboss'] as const).map((k) => (
-                <ListRow key={k} label={CRM_NAME[k]} onPress={() => setKind(k)} right={kind === k ? <Icon name="check" size={18} color={c.accent} /> : <View style={{ width: 18 }} />} />
+              {(['lofty', 'followupboss', 'gohighlevel'] as const).map((k) => (
+                <ListRow key={k} label={CRM_NAME[k]} sub={k === 'gohighlevel' ? 'Also Jtek and other HighLevel CRMs' : undefined} onPress={() => setKind(k)} right={kind === k ? <Icon name="check" size={18} color={c.accent} /> : <View style={{ width: 18 }} />} />
               ))}
-              <ListRow label={CRM_NAME.gohighlevel} sub="Coming soon" />
             </List>
 
-            <SectionLabel>API key</SectionLabel>
+            <SectionLabel>{needsAccount ? 'Access token' : 'API key'}</SectionLabel>
             <List>
               <TextInput
                 value={key}
                 onChangeText={setKey}
-                placeholder={`Paste your ${CRM_NAME[kind]} API key`}
+                placeholder={needsAccount ? 'Paste your access token' : `Paste your ${CRM_NAME[kind]} API key`}
                 placeholderTextColor={c.sub}
                 autoCapitalize="none"
                 autoCorrect={false}
@@ -153,13 +157,34 @@ export default function Connect() {
               {HELP[kind]}
             </T>
 
+            {needsAccount ? (
+              <>
+                <SectionLabel>Location ID</SectionLabel>
+                <List>
+                  <TextInput
+                    value={account}
+                    onChangeText={setAccount}
+                    placeholder="Location ID or the page address"
+                    placeholderTextColor={c.sub}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    accessibilityLabel="Location ID"
+                    style={[font('regular'), { fontSize: 16, color: c.text, minHeight: 48, paddingHorizontal: 16 }]}
+                  />
+                </List>
+                <T size={13} tone="sub" style={{ paddingHorizontal: 16 }}>
+                  It's in your browser's address bar after /location/ when you're in the sub-account. You can paste the whole address.
+                </T>
+              </>
+            ) : null}
+
             {error ? (
               <T size={14} tone="accent" style={{ paddingHorizontal: 4 }}>
                 {error}
               </T>
             ) : null}
 
-            <Pill label={busy ? 'Connecting… this takes a few seconds' : `Connect ${CRM_NAME[kind]}`} size="lg" disabled={busy || key.trim().length < 10} onPress={connect} />
+            <Pill label={busy ? 'Connecting… this takes a few seconds' : `Connect ${CRM_NAME[kind]}`} size="lg" disabled={busy || key.trim().length < 10 || (needsAccount && account.trim().length < 10)} onPress={connect} />
           </>
         )}
 

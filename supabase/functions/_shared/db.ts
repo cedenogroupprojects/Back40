@@ -19,6 +19,8 @@ export type Connection = {
   webhook_secret: string;
   status: string;
   owner_user_id: string | null;
+  last_synced_at?: string | null;
+  owner_crm_user_id?: string | null;
 };
 
 /** Read the CRM token for a connection from Supabase Vault (never stored in plain tables). */

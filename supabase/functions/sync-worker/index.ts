@@ -98,6 +98,46 @@ async function processInbox() {
   return done;
 }
 
+// CRMs that can't push changes to us (GoHighLevel private tokens): every few
+// minutes, read what changed since the last look.
+const POLL_EVERY_MS = 3 * 60_000;
+async function pollConnections() {
+  const { data: conns } = await db.from('crm_connections').select('*').eq('status', 'active').eq('kind', 'gohighlevel');
+  let done = 0;
+  for (const conn of (conns ?? []) as Connection[]) {
+    const last = conn.last_synced_at ? Date.parse(conn.last_synced_at) : 0;
+    if (Date.now() - last < POLL_EVERY_MS) continue;
+    const started = new Date().toISOString();
+    try {
+      const adapter = ADAPTERS[conn.kind];
+      const creds = await credentialsFor(db, conn);
+      // Look back a minute past the last sync so nothing slips through the gap.
+      const since = new Date((last || Date.now() - 86_400_000) - 60_000).toISOString();
+      let cursor: string | null = null;
+      for (let page = 0; page < 3; page++) {
+        await throttle(conn.id, adapter.capabilities.maxRequestsPerMinute);
+        const res = await adapter.listLeads(creds, cursor, { updatedSince: since });
+        for (const l of res.items) {
+          const isNew = Date.parse(l.createdAt) >= Date.parse(since);
+          const row = await upsertLead(db, conn, l, isNew);
+          if (row && isNew) {
+            await throttle(conn.id, adapter.capabilities.maxRequestsPerMinute);
+            await importNotes(db, conn.org_id, row.id as string, await adapter.listNotes(creds, l.crmLeadId)).catch(() => 0);
+          }
+          done++;
+        }
+        if (!res.nextCursor) break;
+        cursor = res.nextCursor;
+      }
+      await db.from('crm_connections').update({ last_synced_at: started }).eq('id', conn.id);
+    } catch (e) {
+      console.error('poll failed', conn.kind, String(e).slice(0, 200));
+      if (e instanceof CrmError && e.status === 401) await db.from('crm_connections').update({ status: 'needs_reauth' }).eq('id', conn.id);
+    }
+  }
+  return done;
+}
+
 async function processOutbox() {
   const { data: jobs } = await db.rpc('claim_outbox', { batch: 50 });
   let done = 0;
@@ -146,5 +186,6 @@ Deno.serve(async (req) => {
   }
   const inbox = await processInbox();
   const outbox = await processOutbox();
-  return json({ inbox, outbox });
+  const polled = await pollConnections();
+  return json({ inbox, outbox, polled });
 });

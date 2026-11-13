@@ -162,7 +162,8 @@ export function subscribeToLeads(onChange: () => void) {
 
 // ───────────────────────── Writes (all go through the server) ─────────────────────────
 
-export const connectCrm = (kind: CrmKind, apiKey: string) => fn<{ ok: boolean; imported: number; mine?: number; matchedYou?: boolean; more: boolean; webhooks: number }>('connect-crm', { kind, apiKey });
+export const connectCrm = (kind: CrmKind, apiKey: string, accountId?: string) =>
+  fn<{ ok: boolean; imported: number; mine?: number; matchedYou?: boolean; more: boolean; webhooks: number }>('connect-crm', { kind, apiKey, accountId });
 
 // ───────────────────────── Nurture ─────────────────────────
 

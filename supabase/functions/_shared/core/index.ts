@@ -6,7 +6,7 @@ export * from './nurture.ts';
 export * from './crm/adapter.ts';
 export { lofty, mapLoftyLead, loftySearchListings, loftyListingDetail, DEAL_SEARCHES, type DealKind, type ListingCriteria, type ListingDetail } from './crm/lofty.ts';
 export { followUpBoss, mapFubPerson } from './crm/followupboss.ts';
-export { goHighLevel, mapGhlContact } from './crm/gohighlevel.ts';
+export { goHighLevel, ghlUsers, mapGhlContact } from './crm/gohighlevel.ts';
 
 import { lofty } from './crm/lofty.ts';
 import { followUpBoss } from './crm/followupboss.ts';

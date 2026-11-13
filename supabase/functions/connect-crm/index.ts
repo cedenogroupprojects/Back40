@@ -5,7 +5,7 @@
 // 3. Saves the connection and imports the first page right away, so leads
 //    show up in the app within seconds; the rest import in the background.
 // 4. Subscribes to the CRM's webhooks so changes flow in live.
-import { ADAPTERS, type CrmKind } from '../_shared/core/index.ts';
+import { ADAPTERS, ghlUsers, type CrmKind } from '../_shared/core/index.ts';
 import { json, preflight, serviceClient, userClient, type Connection } from '../_shared/db.ts';
 import { upsertLead } from '../_shared/sync.ts';
 
@@ -15,11 +15,15 @@ Deno.serve(async (req) => {
   const pre = preflight(req);
   if (pre) return pre;
   if (req.method !== 'POST') return json({ error: 'method' }, 405);
-  const { kind, apiKey, action } = (await req.json().catch(() => ({}))) as { kind?: CrmKind; apiKey?: string; action?: 'connect' | 'disconnect' };
+  const { kind, apiKey, accountId: rawAccount, action } = (await req.json().catch(() => ({}))) as { kind?: CrmKind; apiKey?: string; accountId?: string; action?: 'connect' | 'disconnect' };
   if (!kind || !(kind in ADAPTERS)) return json({ error: 'Pick a CRM.' }, 400);
   if (action === 'disconnect') return disconnect(req, kind);
   const key = (apiKey ?? '').trim();
   if (key.length < 10) return json({ error: 'That key looks too short. Copy the whole API key.' }, 400);
+  // GoHighLevel (and white-label versions like Jtek) also needs the sub-account's Location ID.
+  // Accept the ID itself or a pasted browser address that contains /location/<id>/.
+  const accountId = (rawAccount ?? '').trim().match(/location\/([A-Za-z0-9]+)/)?.[1] ?? (rawAccount ?? '').trim();
+  if (kind === 'gohighlevel' && !/^[A-Za-z0-9]{10,40}$/.test(accountId)) return json({ error: 'Add your Location ID. It’s in your browser’s address bar after /location/.' }, 400);
 
   // Who's asking, and are they a leader on their team?
   const user = userClient(req);
@@ -34,7 +38,7 @@ Deno.serve(async (req) => {
   //    account the key can see every agent's leads, so we only import yours here;
   //    each agent's leads import when they join and link their CRM user.
   const adapter = ADAPTERS[kind];
-  const creds = { kind, accessToken: key, systemName: Deno.env.get('FUB_SYSTEM_NAME') ?? undefined, systemKey: Deno.env.get('FUB_SYSTEM_KEY') ?? undefined };
+  const creds = { kind, accessToken: key, accountId: kind === 'gohighlevel' ? accountId : undefined, systemName: Deno.env.get('FUB_SYSTEM_NAME') ?? undefined, systemKey: Deno.env.get('FUB_SYSTEM_KEY') ?? undefined };
   let crmUserId: string | null = null;
   if (kind === 'lofty') {
     const res = await fetch('https://api.lofty.com/v1.0/me', { headers: { Authorization: `token ${key}`, 'X-Error-Status': 'true' } }).catch(() => null);
@@ -47,16 +51,35 @@ Deno.serve(async (req) => {
     if (!crmUserId) return json({ error: "Connected to Lofty, but couldn't tell which Lofty user this key belongs to. Try again in a minute." }, 400);
   }
 
+  if (kind === 'gohighlevel') {
+    // Match you to your GoHighLevel user by your Back 40 sign-in email.
+    const { data: authUser } = await serviceClient().auth.admin.getUserById(me);
+    const email = authUser?.user?.email?.toLowerCase();
+    try {
+      const users = await ghlUsers(creds);
+      // Solo accounts often sign in to GoHighLevel with another email; one user means it's you.
+      crmUserId = users.find((u) => email && u.email?.toLowerCase() === email)?.id ?? (users.length === 1 ? users[0]!.id : null);
+      console.log('ghl users', users.length, crmUserId ? 'matched you' : 'no email match');
+    } catch (e) {
+      const status = (e as { status?: number }).status;
+      console.error('ghl users failed', status, String(e).slice(0, 200));
+      if (status === 401 || status === 403) return json({ error: "That token didn't work for this Location ID. Check both, and that the token has the Users and Contacts permissions." }, 400);
+    }
+  }
+
   // 1b. Does the key read leads?
   let first;
   try {
-    first = await adapter.listLeads(creds, null, { assignedTo: crmUserId ?? undefined });
+    // GoHighLevel contacts are often unassigned, so read them all; only yours land on your list.
+    first = await adapter.listLeads(creds, null, { assignedTo: kind === 'gohighlevel' ? undefined : (crmUserId ?? undefined) });
   } catch (e) {
     const status = (e as { status?: number }).status;
     console.error('connect-crm check failed', kind, status, String(e).slice(0, 300));
-    return json({ error: status === 401 || status === 403 ? `${kind === 'lofty' ? 'Lofty' : 'Your CRM'} didn't accept that key, or it's missing the "View leads" permission.` : `Couldn't reach ${kind === 'lofty' ? 'Lofty' : 'your CRM'} (${status ?? 'network'}). Try again in a minute.` }, 400);
+    return json({ error: status === 401 || status === 403 ? `${kind === 'lofty' ? 'Lofty' : 'Your CRM'} didn't accept that key, or it's missing the ${kind === 'gohighlevel' ? 'Contacts' : '"View leads"'} permission.` : `Couldn't reach ${kind === 'lofty' ? 'Lofty' : 'your CRM'} (${status ?? 'network'}). Try again in a minute.` }, 400);
   }
-  if (crmUserId) await db.from('members').update({ crm_user_id: crmUserId }).eq('org_id', member.org_id).eq('user_id', me);
+  // Lofty/FUB: your CRM user id lives on your membership (agents link theirs the same way).
+  // GoHighLevel keeps it on the connection, so it never overwrites another CRM's id.
+  if (crmUserId && kind !== 'gohighlevel') await db.from('members').update({ crm_user_id: crmUserId }).eq('org_id', member.org_id).eq('user_id', me);
 
   // 2. Key → Vault.
   const { data: secretRef, error: vErr } = await db.rpc('store_crm_secret', { secret_name: `crm:${member.org_id}:${kind}`, secret: key });
@@ -64,7 +87,7 @@ Deno.serve(async (req) => {
 
   // 3. Connection row (one per team per CRM).
   const { data: existing } = await db.from('crm_connections').select('*').eq('org_id', member.org_id).eq('kind', kind).maybeSingle<Connection>();
-  const fields = { org_id: member.org_id, kind, scope: 'team', owner_user_id: me, secret_ref: secretRef, status: 'active' };
+  const fields = { org_id: member.org_id, kind, scope: 'team', owner_user_id: me, secret_ref: secretRef, status: 'active', account_id: kind === 'gohighlevel' ? accountId : null, owner_crm_user_id: crmUserId };
   const { data: conn, error: cErr } = existing
     ? await db.from('crm_connections').update(fields).eq('id', existing.id).select('*').single<Connection>()
     : await db.from('crm_connections').insert(fields).select('*').single<Connection>();
@@ -83,7 +106,7 @@ Deno.serve(async (req) => {
       console.error('import lead failed', String(e).slice(0, 200));
     }
   }
-  if (first.nextCursor) await db.from('sync_inbox').insert({ connection_id: conn.id, crm: kind, kind: 'backfill', raw: { cursor: first.nextCursor, page: 2, assignee: crmUserId } });
+  if (first.nextCursor) await db.from('sync_inbox').insert({ connection_id: conn.id, crm: kind, kind: 'backfill', raw: { cursor: first.nextCursor, page: 2, assignee: kind === 'gohighlevel' ? undefined : crmUserId } });
   await db.from('crm_connections').update({ last_synced_at: new Date().toISOString() }).eq('id', conn.id);
 
   // 4. Live updates (best effort; the scheduled sync still runs without them).
@@ -154,6 +177,6 @@ async function disconnect(req: Request, kind: CrmKind) {
   const { count } = await db.from('leads').select('id', { count: 'exact', head: true }).eq('connection_id', conn.id);
   await db.rpc('delete_crm_secret', { secret_name: `crm:${member.org_id}:${kind}` });
   await db.from('crm_connections').delete().eq('id', conn.id);
-  await db.from('members').update({ crm_user_id: null }).eq('org_id', member.org_id).eq('user_id', me);
+  if (kind !== 'gohighlevel') await db.from('members').update({ crm_user_id: null }).eq('org_id', member.org_id).eq('user_id', me);
   return json({ ok: true, removed: count ?? 0, webhooksRemoved: hooksRemoved });
 }

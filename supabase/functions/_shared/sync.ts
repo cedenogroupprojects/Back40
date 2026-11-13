@@ -17,6 +17,8 @@ export async function upsertLead(db: Db, conn: Connection, l: CrmLeadInput, isNe
     const { data: member } = await db.from('members').select('user_id').eq('org_id', conn.org_id).eq('crm_user_id', l.assignedUserId).maybeSingle();
     assigned = member?.user_id ?? null;
   }
+  // GoHighLevel: contacts assigned to whoever connected the account (or to nobody) are theirs.
+  if (!assigned && conn.kind === 'gohighlevel' && (!l.assignedUserId || l.assignedUserId === conn.owner_crm_user_id)) assigned = conn.owner_user_id ?? null;
   // Big teams have tens of thousands of leads. Only keep the ones that belong to
   // someone on Back 40 (or that we already have, so a reassignment moves it off a list).
   const { data: had } = await db.from('leads').select('id, fields').eq('connection_id', conn.id).eq('crm_lead_id', l.crmLeadId).maybeSingle();

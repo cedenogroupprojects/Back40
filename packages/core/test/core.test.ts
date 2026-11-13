@@ -236,3 +236,18 @@ test("a CRM's instant auto-text doesn't count as contacting a new lead", () => {
   assert.equal(labelFor(lead({ id: 'a', stage: 'New Leads', createdAt: created, lastContactAt: auto }), DEFAULT_RULES, NOW), 'brand_new');
   assert.notEqual(labelFor(lead({ id: 'b', stage: 'New Leads', createdAt: created, lastContactAt: hoursAgo(1) }), DEFAULT_RULES, NOW), 'brand_new');
 });
+
+test('GoHighLevel contacts take their stage from the open opportunity', async () => {
+  const { mapGhlContact } = await import('../src/crm/gohighlevel.ts');
+  const stages = new Map([['st1', 'Hot Prospect'], ['st2', 'Closed']]);
+  const l = mapGhlContact(
+    { id: 'c1', contactName: 'Ann Lee', dateAdded: '2026-11-12T10:00:00Z', lastActivity: 1794600000000, assignedTo: null, dnd: true, opportunities: [{ id: 'o2', pipeline_stage_id: 'st2', status: 'won' }, { id: 'o1', pipeline_stage_id: 'st1', status: 'open' }] },
+    stages,
+  );
+  assert.equal(l.stage, 'Hot Prospect');
+  assert.equal(l.firstName, 'Ann');
+  assert.equal(l.lastName, 'Lee');
+  assert.ok(l.lastContactAt?.startsWith('2026'));
+  assert.equal(l.fields.doNotText, true);
+  assert.equal(mapGhlContact({ id: 'c2', tags: ['b40:Showing Homes'] }).stage, 'Showing Homes');
+});
