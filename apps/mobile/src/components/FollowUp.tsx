@@ -273,15 +273,24 @@ export function FollowUpQueue({ inTab = false }: { inTab?: boolean }) {
           )}
           <Card style={{ gap: 14 }}>
             <Row gap={12}>
-              <Avatar initials={initials(lead)} size={40} />
-              <View style={{ flex: 1 }}>
-                <T w="semibold" size={16}>
-                  {lead.firstName} {lead.lastName}
-                </T>
-                <T size={13} tone="sub">
-                  {PLAY[d.play]}
-                </T>
-              </View>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Open ${lead.firstName} ${lead.lastName}'s card`}
+                onPress={() => router.push(`/lead/${lead.id}`)}
+                style={({ pressed }) => ({ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12, opacity: pressed ? 0.6 : 1 })}>
+                <Avatar initials={initials(lead)} size={40} />
+                <View style={{ flex: 1 }}>
+                  <Row gap={4}>
+                    <T w="semibold" size={16}>
+                      {lead.firstName} {lead.lastName}
+                    </T>
+                    <Icon name="chevron" size={14} color={c.sub} width={2.2} />
+                  </Row>
+                  <T size={13} tone="sub">
+                    {PLAY[d.play]} · Tap for notes
+                  </T>
+                </View>
+              </Pressable>
               <T w="bold" size={12} tone="sub">
                 {d.channel === 'email' ? 'Email' : 'Text'} · {SOURCE_NAME[lead.crm]}
               </T>
@@ -334,7 +343,7 @@ export function FollowUpQueue({ inTab = false }: { inTab?: boolean }) {
               <List>
                 {pending.slice(1).map((x) => {
                   const l = get(x.leadId);
-                  return l ? <ListRow key={x.id} label={`${l.firstName} ${l.lastName}`} sub={x.body.slice(0, 70) + (x.body.length > 70 ? '…' : '')} value={x.home ? (x.home.kind === 'community' ? 'Community' : 'Home') : x.channel === 'email' ? 'Email' : 'Text'} /> : null;
+                  return l ? <ListRow key={x.id} onPress={() => router.push(`/lead/${l.id}`)} label={`${l.firstName} ${l.lastName}`} sub={x.body.slice(0, 70) + (x.body.length > 70 ? '…' : '')} value={x.home ? (x.home.kind === 'community' ? 'Community' : 'Home') : x.channel === 'email' ? 'Email' : 'Text'} /> : null;
                 })}
               </List>
             </>
