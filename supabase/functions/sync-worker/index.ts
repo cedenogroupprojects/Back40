@@ -80,7 +80,10 @@ async function processInbox() {
         }
         await throttle(conn.id, adapter.capabilities.maxRequestsPerMinute);
         const fresh = await adapter.getLead(creds, crmLeadId);
-        const row = fresh ? await upsertLead(db, conn, fresh, job.kind === 'lead_created') : null;
+        // Lofty sends new leads on the lead-info list as "createdLead".
+        const created = job.kind === 'lead_created' || JSON.stringify(job.raw ?? {}).includes('"createdLead"');
+        const row = fresh ? await upsertLead(db, conn, fresh, created) : null;
+        if (!row && created) console.log('new lead not added', crmLeadId, fresh ? `assignee ${fresh.assignedUserId ?? 'none'}, stage ${fresh.stage}` : 'not found');
         if (row && (job.kind === 'note' || job.kind === 'lead_created')) {
           await throttle(conn.id, adapter.capabilities.maxRequestsPerMinute);
           await importNotes(db, conn.org_id, row.id as string, await adapter.listNotes(creds, crmLeadId));

@@ -25,13 +25,27 @@ export const DEFAULT_RULES: HotRules = {
 
 const t = (iso: string | null | undefined) => (iso ? Date.parse(iso) : NaN);
 
-export function isBrandNew(lead: Lead, now: number): boolean {
-  return !lead.lastContactAt && now - t(lead.createdAt) < 7 * DAY;
+// A CRM auto-text or auto-email fires within minutes of a lead coming in. That
+// isn't anyone actually reaching them, so it doesn't count as contact.
+const AUTO_TOUCH_MS = 15 * 60 * 1000;
+
+/** Was this lead ever really contacted (not just the CRM's instant auto-reply)? */
+export function reallyContacted(lead: Lead): boolean {
+  const last = t(lead.lastContactAt);
+  if (Number.isNaN(last)) return false;
+  return last - t(lead.createdAt) > AUTO_TOUCH_MS;
 }
 
+export function isBrandNew(lead: Lead, now: number): boolean {
+  return !reallyContacted(lead) && now - t(lead.createdAt) < 7 * DAY;
+}
+
+// "New Lead" should match "New Leads", "new lead " etc.
+const stageKey = (s: string) => s.toLowerCase().trim().replace(/s$/, '');
+
 export function isHotStage(lead: Lead, rules: HotRules): boolean {
-  const s = lead.stage.toLowerCase();
-  return rules.hotStages.some((h) => h.toLowerCase() === s);
+  const s = stageKey(lead.stage);
+  return rules.hotStages.some((h) => stageKey(h) === s);
 }
 
 export function daysSinceContact(lead: Lead, now: number): number {

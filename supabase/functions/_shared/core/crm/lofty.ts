@@ -125,8 +125,13 @@ export const lofty: CrmAdapter = {
   },
 
   async getLead(c, id) {
-    const res = (await crmFetch(`${BASE}/v1.0/leads/${id}`, { headers: headers(c) })) as LoftyLead | null;
-    return res ? mapLoftyLead(res) : null;
+    const res = (await crmFetch(`${BASE}/v1.0/leads/${id}`, { headers: headers(c) })) as Record<string, unknown> | null;
+    if (!res) return null;
+    // The single-lead endpoint may wrap the lead ({lead}, {data}, {leads:[…]}). Unwrap, and
+    // never lose the id we asked for: without it the lead can't be matched or saved.
+    const inner = (res.lead ?? res.data ?? (Array.isArray(res.leads) ? res.leads[0] : null) ?? res) as LoftyLead;
+    if (inner.leadId == null) console.log('lofty getLead shape', id, Object.keys(res).slice(0, 12).join(','));
+    return mapLoftyLead({ ...inner, leadId: inner.leadId ?? id });
   },
 
   // Verified live: GET /v1.0/notes?leadId= → { notes: [{ noteId, content, createTime, creatorName, isPin, systemNote, deleteFlag }] }
