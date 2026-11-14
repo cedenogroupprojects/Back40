@@ -26,7 +26,7 @@ const NOTES_PER_RUN = 15;
 const LEADS_PER_RUN = 2; // overnight: a few leads every 15 minutes, so Lofty never sees a burst
 const MAX_DETAIL_LOOKUPS = 10; // per lead
 const LOFTY_GAP_MS = 1100; // space every Lofty call
-const PROMPT_V = 6; // bump when the writing rules change; older waiting messages get rewritten
+const PROMPT_V = 7; // bump when the writing rules change; older waiting messages get rewritten
 
 let lastLofty = 0;
 async function paced<T>(fn: () => Promise<T>): Promise<T> {
@@ -210,21 +210,13 @@ async function draftDue(s: Settings, limit: number, tz: string, quietEnd?: strin
 
     const prompt = await promptFor(lead, fields, { agentName, voice, channel, step: st.step as number, touch, home, offer });
 
-    let msg: { body: string; subject?: string; why: string };
+    let msg: Written | null;
     try {
-      msg = await write(prompt, s);
-      // Double-check: nothing about the home that the listing doesn't say.
-      if (home?.kind === 'listing') {
-        const check = await askModel(factCheckPrompt(msg.body, home), s, FAST_MODEL, 150).catch(() => ({ ok: true }) as Record<string, unknown>);
-        if (check.ok === false) {
-          msg = await write(`${prompt}\n\nIMPORTANT: a previous draft wrongly said "${String(check.problem ?? '').slice(0, 160)}". Mention only the listed numbers and verified MLS phrases.`, s);
-          const again = await askModel(factCheckPrompt(msg.body, home), s, FAST_MODEL, 150).catch(() => ({ ok: true }) as Record<string, unknown>);
-          if (again.ok === false) {
-            console.error('fact check failed twice; skipping lead today', leadId);
-            await later(1);
-            continue;
-          }
-        }
+      msg = await writeChecked(prompt, s, home);
+      if (!msg) {
+        console.error('fact check failed twice; skipping lead today', leadId);
+        await later(1);
+        continue;
       }
     } catch (e) {
       console.error('nurture write failed', String(e).slice(0, 200));
@@ -235,7 +227,7 @@ async function draftDue(s: Settings, limit: number, tz: string, quietEnd?: strin
     const sendAfter = s.mode === 'auto' ? nextDaytime(tz, quietEnd) : null;
     await db.from('drafts').insert({
       org_id: s.org_id, lead_id: leadId, user_id: s.user_id, channel, play: 'nurture',
-      subject: msg.subject ?? null, body: msg.body, why: msg.why, status: 'pending', home, send_after: sendAfter, prompt_v: PROMPT_V,
+      subject: msg.subject ?? null, body: msg.body, why: msg.why, alternatives: msg.alternatives, status: 'pending', home, send_after: sendAfter, prompt_v: PROMPT_V,
       home_options: (touch === 'home' || touch === 'teaser') && options.length > 1 ? options : null,
     });
     await db.from('nurture_state').update({
@@ -431,10 +423,38 @@ async function findCommunity(orgId: string, f: LeadFields, sent: Set<string>): P
   };
 }
 
-async function write(prompt: string, s: Pick<Settings, 'org_id' | 'user_id'>, model = MODEL, maxTokens = 700): Promise<{ body: string; subject?: string; why: string }> {
+type Msg = { body: string; subject?: string; why: string };
+type Written = Msg & { alternatives: Msg[] };
+
+/** The model writes three versions; `body` is the first, `alternatives` holds all of them. */
+async function write(prompt: string, s: Pick<Settings, 'org_id' | 'user_id'>, model = MODEL, maxTokens = 900): Promise<Written> {
   const parsed = await askModel(prompt, s, model, maxTokens);
-  if (!parsed.body) throw new Error('empty draft');
-  return { body: linkLast(String(parsed.body)), subject: parsed.subject ? String(parsed.subject) : undefined, why: String(parsed.why ?? 'Keeping in touch') };
+  const raw = (Array.isArray(parsed.options) ? parsed.options : [parsed]) as Record<string, unknown>[];
+  const all: Msg[] = raw
+    .filter((o) => o && typeof o.body === 'string' && o.body.trim())
+    .slice(0, 3)
+    .map((o) => ({ body: linkLast(String(o.body)), subject: o.subject ? String(o.subject) : undefined, why: String(o.why ?? 'Keeping in touch') }));
+  if (!all.length) throw new Error('empty draft');
+  return { ...all[0]!, alternatives: all };
+}
+
+/** Write, then make sure no version claims anything about the home the listing doesn't say. Null = gave up. */
+async function writeChecked(prompt: string, s: Pick<Settings, 'org_id' | 'user_id'>, home: HomeCard | null): Promise<Written | null> {
+  let msg = await write(prompt, s);
+  if (home?.kind !== 'listing') return msg;
+  const keep = async (m: Written) => {
+    const checks = await Promise.all(m.alternatives.map((o) => askModel(factCheckPrompt(o.body, home), s, FAST_MODEL, 150).catch(() => ({ ok: true }) as Record<string, unknown>)));
+    const ok = m.alternatives.filter((_, i) => checks[i]!.ok !== false);
+    const problem = String(checks.find((c) => c.ok === false)?.problem ?? '');
+    return { ok, problem };
+  };
+  let r = await keep(msg);
+  if (!r.ok.length) {
+    msg = await write(`${prompt}\n\nIMPORTANT: a previous draft wrongly said "${r.problem.slice(0, 160)}". Mention only the listed numbers and verified MLS phrases.`, s);
+    r = await keep(msg);
+    if (!r.ok.length) return null;
+  }
+  return { ...r.ok[0]!, alternatives: r.ok };
 }
 
 async function askModel(prompt: string, s: Pick<Settings, 'org_id' | 'user_id'>, model: string, maxTokens: number): Promise<Record<string, unknown>> {
@@ -596,20 +616,17 @@ async function rewrite(me: string, orgId: string, x: NonNullable<Awaited<ReturnT
     voice: (member?.voice_profile as { summary?: string } | null)?.summary,
     channel: d.channel, step, touch, home, offer,
   });
-  let msg: Awaited<ReturnType<typeof write>>;
+  let msg: Written | null;
   try {
-    msg = await write(prompt, { org_id: orgId, user_id: me });
-    if (home?.kind === 'listing') {
-      const check = await askModel(factCheckPrompt(msg.body, home), { org_id: orgId, user_id: me }, FAST_MODEL, 150).catch(() => ({ ok: true }) as Record<string, unknown>);
-      if (check.ok === false) msg = await write(`${prompt}\n\nIMPORTANT: a previous draft wrongly said "${String(check.problem ?? '').slice(0, 160)}". Mention only the listed numbers and verified MLS phrases.`, { org_id: orgId, user_id: me });
-    }
+    msg = await writeChecked(prompt, { org_id: orgId, user_id: me }, home);
+    if (!msg) return json({ error: 'Could not write a text that sticks to the listing facts. Try another home.' }, 500);
   } catch (e) {
     console.error('rewrite failed', String(e).slice(0, 200));
     return json({ error: String(e).includes('daily_cap') ? 'Daily AI limit reached. Try tomorrow.' : 'Could not rewrite the message. Try again.' }, 500);
   }
   const sentIds = ((st?.sent_home_ids ?? []) as string[]).filter((id) => id !== d.home?.id);
   await db.from('nurture_state').update({ sent_home_ids: home ? [...sentIds, home.id] : sentIds, updated_at: new Date().toISOString() }).eq('lead_id', lead.id);
-  const { data: updated } = await db.from('drafts').update({ body: msg.body, subject: msg.subject ?? d.subject, why: msg.why, home, prompt_v: PROMPT_V }).eq('id', d.id).select('*').single();
+  const { data: updated } = await db.from('drafts').update({ body: msg.body, subject: msg.subject ?? d.subject, why: msg.why, alternatives: msg.alternatives, home, prompt_v: PROMPT_V }).eq('id', d.id).select('*').single();
   return json({ ok: true, draft: updated });
 }
 

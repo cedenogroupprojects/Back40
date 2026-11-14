@@ -142,8 +142,8 @@ export async function fetchTimeline(leadId: string): Promise<TimelineItem[]> {
 }
 
 export async function fetchDrafts(userId: string): Promise<Draft[]> {
-  const { data } = await supabase().from('drafts').select('id, lead_id, channel, play, subject, body, why, status, home, home_options').eq('user_id', userId).eq('status', 'pending').is('send_after', null).order('created_at', { ascending: true }).limit(60);
-  return (data ?? []).map((d) => ({ id: d.id, leadId: d.lead_id, channel: d.channel, play: d.play, subject: d.subject ?? undefined, body: d.body, why: d.why, status: d.status, home: d.home ?? null, homeOptions: d.home_options ?? null })) as Draft[];
+  const { data } = await supabase().from('drafts').select('id, lead_id, channel, play, subject, body, why, status, home, home_options, alternatives').eq('user_id', userId).eq('status', 'pending').is('send_after', null).order('created_at', { ascending: true }).limit(60);
+  return (data ?? []).map((d) => ({ id: d.id, leadId: d.lead_id, channel: d.channel, play: d.play, subject: d.subject ?? undefined, body: d.body, why: d.why, status: d.status, home: d.home ?? null, homeOptions: d.home_options ?? null, alternatives: d.alternatives ?? null })) as Draft[];
 }
 
 export async function fetchCallsSince(userId: string, sinceIso: string) {

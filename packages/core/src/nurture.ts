@@ -237,7 +237,7 @@ export function nurturePrompt(c: DraftContext): string {
   const opening = openingAngle(c.touch, c.variant ?? c.step);
   const intro = introLine(c.agentName, c.lead.source);
   const first = c.agentName.split(' ')[0] || c.agentName;
-  return `You are ${first}, a real estate agent, texting a lead from your own phone. Write the text you'd actually send.
+  return `You are ${first}, a real estate agent, texting a lead from your own phone. Write THREE different texts you'd actually send, so the agent can pick the one that sounds most like them.
 
 LEAD (facts you may use — nothing else):
 ${facts.join('\n')}
@@ -246,7 +246,8 @@ ${c.history.length ? c.history.map((h) => `- ${h}`).join('\n') : '- none'}
 ${home ? `\n${home}\n` : ''}${offer ? `\n${offer}\n` : ''}
 WHAT TO WRITE
 ${plan}
-${opening ? `- Open this way: ${opening}\n` : ''}${closing ? `- End this way: ${closing}\n` : ''}
+${opening ? `- Text 1 opens this way: ${opening}\n` : ''}${closing ? `- Text 1 ends this way: ${closing}\n` : ''}- Texts 2 and 3 each take a different angle: a different opening style, a different lead detail where there is one, and a different easy ask (see the patterns above and below). No two texts may start the same way or end with the same question.
+
 HOW IT SHOULD SOUND (these are the style to match; never reuse their facts):
 "Daniel!! I think I found it. Single story in Riverside, 4 bed, $599K, and it's not even on the market yet. Want to go see it before anyone else does?"
 "Ann, ok you're going to love this one. Heated pool, spa, and a full bedroom downstairs in Ontario. It's not listed yet. Want me to get you in?"
@@ -272,7 +273,9 @@ ${c.channel === 'text' ? '- Max 280 characters before the link. No links other t
 - Fair housing: never describe a place by who lives there; no schools-as-demographics, no "family neighborhood" steering.
 ${c.voice ? `- Match this agent's own texting style: ${c.voice}` : ''}
 
-Return exactly one JSON object and nothing else: {"body": "...", ${c.channel === 'email' ? '"subject": "short, casual subject, like a text", ' : ''}"why": "one short line for the agent on why this message, e.g. 'Coming soon in Fontana; asks if that is their area'"}`;
+Every rule above applies to all three texts.
+
+Return exactly one JSON object and nothing else: {"options": [{"body": "...", ${c.channel === 'email' ? '"subject": "short, casual subject, like a text", ' : ''}"why": "one short line for the agent on why this message, e.g. 'Coming soon in Fontana; asks if that is their area'"}, {…}, {…}]}`;
 }
 
 /** Stages that mean the deal is done or dead: never nurture these. */

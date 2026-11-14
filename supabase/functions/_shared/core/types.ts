@@ -139,6 +139,8 @@ export interface Draft {
   home?: import('./nurture.ts').HomeCard | null;
   /** Up to 5 homes the agent can swap in (coming soon / new / price drop). */
   homeOptions?: import('./nurture.ts').HomeCard[] | null;
+  /** Up to three written versions; `body` is the first. The agent picks one. */
+  alternatives?: { body: string; subject?: string; why: string }[] | null;
 }
 
 export interface Agent {

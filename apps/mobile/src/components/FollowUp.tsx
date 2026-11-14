@@ -184,6 +184,11 @@ export function FollowUpQueue({ inTab = false }: { inTab?: boolean }) {
   const lead = d ? get(d.leadId) : undefined;
   const [editing, setEditing] = useState(false);
   const [body, setBody] = useState('');
+  // Three versions per lead; which one is showing for each draft.
+  const [picks, setPicks] = useState<Record<string, number>>({});
+  const versions = d ? (d.alternatives?.length ? d.alternatives : [{ body: d.body, subject: d.subject, why: d.why }]) : [];
+  const pick = d ? Math.min(picks[d.id] ?? 0, Math.max(0, versions.length - 1)) : 0;
+  const shown = versions[pick];
   const [confirmAll, setConfirmAll] = useState(false);
   const { reload, isLiveMode } = useStore();
   const [busy, setBusy] = useState(false);
@@ -295,17 +300,24 @@ export function FollowUpQueue({ inTab = false }: { inTab?: boolean }) {
                 {d.channel === 'email' ? 'Email' : 'Text'} · {SOURCE_NAME[lead.crm]}
               </T>
             </Row>
+            {versions.length > 1 && !editing ? (
+              <Row gap={8}>
+                {versions.map((_, i) => (
+                  <Pill key={i} label={`Text ${i + 1}`} size="sm" kind={i === pick ? 'primary' : 'soft'} accessibilityLabel={`Show text option ${i + 1}`} onPress={() => setPicks((p) => ({ ...p, [d.id]: i }))} style={{ flex: 1 }} />
+                ))}
+              </Row>
+            ) : null}
             {editing ? (
               <TextInput value={body} onChangeText={setBody} multiline autoFocus accessibilityLabel="Edit message" style={{ ...font('medium'), fontSize: 15, color: c.text, backgroundColor: c.soft, borderRadius: 16, padding: 14, minHeight: 120, textAlignVertical: 'top' }} />
             ) : (
               <View style={{ alignSelf: 'flex-end', maxWidth: '88%', backgroundColor: c.hero, borderRadius: 18, borderBottomRightRadius: 5, paddingHorizontal: 13, paddingVertical: 9 }}>
-                {d.subject ? (
+                {shown?.subject ? (
                   <T w="semibold" size={15} style={{ color: c.onHero }}>
-                    {d.subject}
+                    {shown.subject}
                   </T>
                 ) : null}
                 <T size={16} style={{ color: c.onHero }}>
-                  {d.body}
+                  {shown?.body ?? d.body}
                 </T>
               </View>
             )}
@@ -320,12 +332,12 @@ export function FollowUpQueue({ inTab = false }: { inTab?: boolean }) {
               <T w="semibold" size={13} tone="sub">
                 Why:{' '}
               </T>
-              {d.why}
+              {shown?.why ?? d.why}
             </T>
             <Row>
               <Pill label="Skip" kind="soft" onPress={() => { setEditing(false); decideDraft(d.id, 'skipped'); }} style={{ flex: 1 }} />
-              <Pill label={editing ? 'Done' : 'Edit'} kind="soft" onPress={() => { if (!editing) setBody(d.body); setEditing((v) => !v); }} style={{ flex: 1 }} />
-              <Pill label={sending ? 'Checking…' : 'Send'} icon="send" disabled={sending} onPress={() => void sendOne(d.id, editing ? body : undefined)} style={{ flex: 2 }} />
+              <Pill label={editing ? 'Done' : 'Edit'} kind="soft" onPress={() => { if (!editing) setBody(shown?.body ?? d.body); setEditing((v) => !v); }} style={{ flex: 1 }} />
+              <Pill label={sending ? 'Checking…' : 'Send'} icon="send" disabled={sending} onPress={() => void sendOne(d.id, editing ? body : pick > 0 ? shown?.body : undefined)} style={{ flex: 2 }} />
             </Row>
           </Card>
           {pending.length > 1 ? (
