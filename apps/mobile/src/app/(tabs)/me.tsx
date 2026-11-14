@@ -38,7 +38,7 @@ function Toggle({ label, value, onChange, sub }: { label: string; value: boolean
 function Stepper({ value, onChange, disabled }: { value: number; onChange: (v: number) => void; disabled?: boolean }) {
   const { c } = useTheme();
   const btn = (label: string, d: number, a11y: string) => (
-    <Pressable accessibilityRole="button" accessibilityLabel={a11y} disabled={disabled} onPress={() => onChange(Math.min(50, Math.max(1, value + d)))} hitSlop={6} style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: c.soft, alignItems: 'center', justifyContent: 'center', opacity: disabled ? 0.4 : 1 }}>
+    <Pressable accessibilityRole="button" accessibilityLabel={a11y} disabled={disabled} onPress={() => onChange(Math.min(50, Math.max(1, value + d)))} hitSlop={6} style={{ width: 32, height: 32, borderRadius: 2, backgroundColor: c.soft, alignItems: 'center', justifyContent: 'center', opacity: disabled ? 0.4 : 1 }}>
       <T w="bold" size={17}>
         {label}
       </T>

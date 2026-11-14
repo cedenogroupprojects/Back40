@@ -47,16 +47,16 @@ export default function Ask() {
         ) : null}
         {msgs.map((m, i) =>
           m.from === 'me' ? (
-            <View key={i} style={{ alignSelf: 'flex-end', maxWidth: '82%', backgroundColor: c.text, borderRadius: 18, borderBottomRightRadius: 5, paddingHorizontal: 13, paddingVertical: 9 }}>
+            <View key={i} style={{ alignSelf: 'flex-end', maxWidth: '82%', backgroundColor: c.text, borderRadius: 2, borderBottomRightRadius: 2, paddingHorizontal: 13, paddingVertical: 9 }}>
               <T size={16} style={{ color: c.bg }}>
                 {m.text}
               </T>
             </View>
           ) : (
-            <View key={i} style={{ alignSelf: 'flex-start', maxWidth: '90%', backgroundColor: c.card, borderRadius: 18, borderBottomLeftRadius: 5, paddingHorizontal: 13, paddingVertical: 10, gap: 8 }}>
+            <View key={i} style={{ alignSelf: 'flex-start', maxWidth: '90%', backgroundColor: c.card, borderRadius: 2, borderBottomLeftRadius: 2, paddingHorizontal: 13, paddingVertical: 10, gap: 8 }}>
               <T size={15}>{m.text}</T>
               {m.source ? (
-                <View style={{ alignSelf: 'flex-start', backgroundColor: c.soft, borderRadius: 12, paddingHorizontal: 10, paddingVertical: 4 }}>
+                <View style={{ alignSelf: 'flex-start', backgroundColor: c.soft, borderRadius: 2, paddingHorizontal: 10, paddingVertical: 4 }}>
                   <T w="bold" size={12} tone="sub">
                     {m.source}
                   </T>
@@ -73,7 +73,7 @@ export default function Ask() {
         )}
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingTop: 4 }}>
           {SUGGEST.map((s) => (
-            <Pressable key={s} accessibilityRole="button" onPress={() => ask(s)} style={{ minHeight: 34, paddingHorizontal: 12, borderRadius: 8, backgroundColor: c.card, justifyContent: 'center' }}>
+            <Pressable key={s} accessibilityRole="button" onPress={() => ask(s)} style={{ minHeight: 34, paddingHorizontal: 12, borderRadius: 2, backgroundColor: c.card, justifyContent: 'center' }}>
               <T w="medium" size={14} tone="accent">
                 {s}
               </T>
@@ -90,9 +90,9 @@ export default function Ask() {
           placeholderTextColor={c.sub}
           accessibilityLabel="Ask Back 40"
           returnKeyType="send"
-          style={{ flex: 1, minHeight: 38, borderRadius: 19, borderWidth: HAIRLINE, borderColor: c.sep, backgroundColor: c.card, paddingHorizontal: 14, ...font('regular'), fontSize: 16, color: c.text }}
+          style={{ flex: 1, minHeight: 38, borderRadius: 2, borderWidth: HAIRLINE, borderColor: c.sep, backgroundColor: c.card, paddingHorizontal: 14, ...font('regular'), fontSize: 16, color: c.text }}
         />
-        <Pressable accessibilityRole="button" accessibilityLabel="Send question" onPress={() => ask(q)} style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: q ? c.accent : c.soft, alignItems: 'center', justifyContent: 'center' }}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Send question" onPress={() => ask(q)} style={{ width: 34, height: 34, borderRadius: 2, backgroundColor: q ? c.accent : c.soft, alignItems: 'center', justifyContent: 'center' }}>
           <Icon name={q ? 'send' : 'mic'} size={16} color={q ? c.onAccent : c.sub} />
         </Pressable>
       </Row>

@@ -25,7 +25,7 @@ export default function Onboarding() {
   const dots = (
     <Row gap={6}>
       {[0, 1, 2].map((i) => (
-        <View key={i} style={{ width: i === step ? 28 : 6, height: 6, borderRadius: 3, backgroundColor: i === step ? c.accent : c.track }} />
+        <View key={i} style={{ width: i === step ? 28 : 6, height: 6, borderRadius: 2, backgroundColor: i === step ? c.accent : c.track }} />
       ))}
     </Row>
   );
@@ -78,14 +78,14 @@ export default function Onboarding() {
           </T>
           <T tone="body">Hit it every day to build your streak. Your score climbs when hot leads get a call fast.</T>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 24, paddingVertical: 8 }}>
-            <Pressable accessibilityRole="button" accessibilityLabel="Fewer calls" onPress={() => setGoal((g) => Math.max(1, g - 1))} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: c.soft, alignItems: 'center', justifyContent: 'center' }}>
+            <Pressable accessibilityRole="button" accessibilityLabel="Fewer calls" onPress={() => setGoal((g) => Math.max(1, g - 1))} style={{ width: 44, height: 44, borderRadius: 2, backgroundColor: c.soft, alignItems: 'center', justifyContent: 'center' }}>
               <T w="bold" size={22}>−</T>
             </Pressable>
             <View style={{ alignItems: 'center', minWidth: 80 }}>
               <T w="heavy" size={40}>{goal}</T>
               <T size={13} tone="sub">calls a day</T>
             </View>
-            <Pressable accessibilityRole="button" accessibilityLabel="More calls" onPress={() => setGoal((g) => Math.min(50, g + 1))} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: c.soft, alignItems: 'center', justifyContent: 'center' }}>
+            <Pressable accessibilityRole="button" accessibilityLabel="More calls" onPress={() => setGoal((g) => Math.min(50, g + 1))} style={{ width: 44, height: 44, borderRadius: 2, backgroundColor: c.soft, alignItems: 'center', justifyContent: 'center' }}>
               <T w="bold" size={22}>+</T>
             </Pressable>
           </View>

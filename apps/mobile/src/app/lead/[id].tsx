@@ -35,7 +35,7 @@ export default function LeadDetail() {
   const label = labelFor(lead, settings.rules, now);
 
   const big = (icon: IconName, text: string, onPress: () => void, primary?: boolean) => (
-    <Pressable accessibilityRole="button" accessibilityLabel={`${text} ${lead.firstName}`} onPress={onPress} style={({ pressed }) => ({ flex: 1, height: 64, borderRadius: 20, backgroundColor: primary ? c.accent : c.text, alignItems: 'center', justifyContent: 'center', gap: 4, opacity: pressed ? 0.8 : 1 })}>
+    <Pressable accessibilityRole="button" accessibilityLabel={`${text} ${lead.firstName}`} onPress={onPress} style={({ pressed }) => ({ flex: 1, height: 64, borderRadius: 2, backgroundColor: primary ? c.accent : c.text, alignItems: 'center', justifyContent: 'center', gap: 4, opacity: pressed ? 0.8 : 1 })}>
       <Icon name={icon} size={20} color={primary ? '#FFFFFF' : c.bg} />
       <T w="bold" size={14} style={{ color: primary ? '#FFFFFF' : c.bg }}>
         {text}
@@ -50,19 +50,19 @@ export default function LeadDetail() {
   return (
     <Screen bottomSpace={40}>
       <Row style={{ justifyContent: 'space-between' }}>
-        <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={() => router.back()} style={({ pressed }) => ({ width: 44, height: 44, borderRadius: 22, backgroundColor: c.card, borderWidth: 1, borderColor: c.sep, alignItems: 'center', justifyContent: 'center', opacity: pressed ? 0.7 : 1 })}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={() => router.back()} style={({ pressed }) => ({ width: 44, height: 44, borderRadius: 2, backgroundColor: c.card, borderWidth: 1, borderColor: c.sep, alignItems: 'center', justifyContent: 'center', opacity: pressed ? 0.7 : 1 })}>
           <Icon name="back" size={20} color={c.text} width={2.4} />
         </Pressable>
         <T w="semibold" size={13} tone="sub">
           {lead.crm === 'manual' ? 'Added in Back 40' : `Synced with ${SOURCE_NAME[lead.crm]}`}
         </T>
-        <Pressable accessibilityRole="button" accessibilityLabel={lead.pinned ? 'Unpin from Today' : 'Pin to Today'} onPress={() => togglePin(lead.id)} style={({ pressed }) => ({ width: 44, height: 44, borderRadius: 22, backgroundColor: lead.pinned ? c.text : c.card, borderWidth: 1, borderColor: lead.pinned ? c.text : c.sep, alignItems: 'center', justifyContent: 'center', opacity: pressed ? 0.7 : 1 })}>
+        <Pressable accessibilityRole="button" accessibilityLabel={lead.pinned ? 'Unpin from Today' : 'Pin to Today'} onPress={() => togglePin(lead.id)} style={({ pressed }) => ({ width: 44, height: 44, borderRadius: 2, backgroundColor: lead.pinned ? c.text : c.card, borderWidth: 1, borderColor: lead.pinned ? c.text : c.sep, alignItems: 'center', justifyContent: 'center', opacity: pressed ? 0.7 : 1 })}>
           <Icon name="pin" size={19} color={lead.pinned ? c.bg : c.text} />
         </Pressable>
       </Row>
 
       <View style={{ gap: 8, paddingHorizontal: 4, marginTop: 6 }}>
-        <View style={{ alignSelf: 'flex-start', backgroundColor: c.accent, borderRadius: 999, paddingHorizontal: 11, paddingVertical: 6 }}>
+        <View style={{ alignSelf: 'flex-start', backgroundColor: c.accent, borderRadius: 2, paddingHorizontal: 11, paddingVertical: 6 }}>
           <T w="bold" size={12} style={{ color: '#FFFFFF', letterSpacing: 0.6 }}>
             {STATUS_TEXT[label].toLowerCase() === lead.stage.toLowerCase() || STATUS_TEXT[label] === 'Working' ? lead.stage.toUpperCase() : `${STATUS_TEXT[label].toUpperCase()} · ${lead.stage.toUpperCase()}`}
           </T>
@@ -101,7 +101,7 @@ export default function LeadDetail() {
           <SectionLabel>What they want</SectionLabel>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
             {chips.map((x) => (
-              <View key={x} style={{ backgroundColor: c.card, borderWidth: 1, borderColor: c.sep, borderRadius: 999, paddingHorizontal: 13, paddingVertical: 8 }}>
+              <View key={x} style={{ backgroundColor: c.card, borderWidth: 1, borderColor: c.sep, borderRadius: 2, paddingHorizontal: 13, paddingVertical: 8 }}>
                 <T w="semibold" size={14}>
                   {x}
                 </T>
@@ -116,11 +116,11 @@ export default function LeadDetail() {
           <SectionLabel>Deals for {lead.firstName || 'them'}</SectionLabel>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -16 }} contentContainerStyle={{ gap: 12, paddingHorizontal: 16 }}>
             {deals.map((h) => (
-              <Pressable key={h.id} accessibilityRole="link" accessibilityLabel={`Open ${h.title}`} disabled={!h.url} onPress={() => h.url && void Linking.openURL(h.url)} style={({ pressed }) => ({ width: 232, borderRadius: 20, overflow: 'hidden', backgroundColor: c.card, borderWidth: 1, borderColor: c.sep, opacity: pressed ? 0.85 : 1 })}>
+              <Pressable key={h.id} accessibilityRole="link" accessibilityLabel={`Open ${h.title}`} disabled={!h.url} onPress={() => h.url && void Linking.openURL(h.url)} style={({ pressed }) => ({ width: 232, borderRadius: 2, overflow: 'hidden', backgroundColor: c.card, borderWidth: 1, borderColor: c.sep, opacity: pressed ? 0.85 : 1 })}>
                 <View style={{ height: 124, backgroundColor: c.track }}>
                   {h.photo ? <Image source={{ uri: h.photo }} style={{ width: '100%', height: '100%' }} accessibilityIgnoresInvertColors /> : null}
                   {h.badge ? (
-                    <View style={{ position: 'absolute', left: 10, top: 10, backgroundColor: h.badge === 'price_drop' ? c.accent : c.text, borderRadius: 999, paddingHorizontal: 9, paddingVertical: 5 }}>
+                    <View style={{ position: 'absolute', left: 10, top: 10, backgroundColor: h.badge === 'price_drop' ? c.accent : c.text, borderRadius: 2, paddingHorizontal: 9, paddingVertical: 5 }}>
                       <T w="bold" size={11} style={{ color: h.badge === 'price_drop' ? '#FFFFFF' : c.bg, letterSpacing: 0.5 }}>
                         {BADGE_TEXT[h.badge].toUpperCase()}
                       </T>
@@ -190,14 +190,14 @@ export default function LeadDetail() {
           placeholderTextColor={c.sub}
           multiline
           accessibilityLabel="Note"
-          style={{ flex: 1, minHeight: 44, maxHeight: 120, ...font('medium'), fontSize: 15, color: c.text, backgroundColor: c.card, borderRadius: 22, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 10, textAlignVertical: 'top' }}
+          style={{ flex: 1, minHeight: 44, maxHeight: 120, ...font('medium'), fontSize: 15, color: c.text, backgroundColor: c.card, borderRadius: 2, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 10, textAlignVertical: 'top' }}
         />
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Save note to CRM"
           disabled={!note.trim()}
           onPress={() => { addNote(lead.id, note.trim()); setNote(''); }}
-          style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: note.trim() ? c.text : c.soft, alignItems: 'center', justifyContent: 'center' }}>
+          style={{ width: 44, height: 44, borderRadius: 2, backgroundColor: note.trim() ? c.text : c.soft, alignItems: 'center', justifyContent: 'center' }}>
           <Icon name="send" size={18} color={note.trim() ? c.bg : c.sub} />
         </Pressable>
       </Row>

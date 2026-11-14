@@ -127,8 +127,8 @@ export default function Admin() {
             <T size={13} w="semibold" style={{ width: 80 }}>
               {short(b.label)}
             </T>
-            <View style={{ flex: 1, height: 10, borderRadius: 5, backgroundColor: c.soft, overflow: 'hidden' }}>
-              <View style={{ width: `${(totals[b.id] / maxTotal) * 100}%`, height: 10, borderRadius: 5, backgroundColor: b.id === 'escrow' ? c.good : c.accent }} />
+            <View style={{ flex: 1, height: 10, borderRadius: 2, backgroundColor: c.soft, overflow: 'hidden' }}>
+              <View style={{ width: `${(totals[b.id] / maxTotal) * 100}%`, height: 10, borderRadius: 2, backgroundColor: b.id === 'escrow' ? c.good : c.accent }} />
             </View>
             <T w="heavy" size={13} style={{ width: 28, textAlign: 'right' }}>
               {totals[b.id]}

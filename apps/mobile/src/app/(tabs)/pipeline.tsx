@@ -8,7 +8,7 @@
 // - Every move shows an Undo, and writes the stage back to the CRM.
 import { router } from 'expo-router';
 import { useMemo, useRef, useState } from 'react';
-import { Modal, Pressable, ScrollView, View } from 'react-native';
+import { Modal, Pressable, ScrollView, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { groupByBucket, type Bucket, type BucketId, type Lead } from '@back40/core';
@@ -19,6 +19,7 @@ import { money, relTime, useStore } from '@/data/store';
 import { tap } from '@/lib/actions';
 import { SOURCE_NAME } from '@/lib/crm';
 import { useTheme } from '@/theme/ThemeProvider';
+import { font } from '@/theme/tokens';
 
 export default function Pipeline() {
   const { c } = useTheme();
@@ -29,6 +30,15 @@ export default function Pipeline() {
   // Start on the first column that has someone in it.
   const stage = picked && PIPELINE.some((b) => b.id === picked) ? picked : (PIPELINE.find((b) => groups[b.id]?.length)?.id ?? PIPELINE[0]!.id);
   const [sheet, setSheet] = useState<Lead | null>(null);
+  // Search finds anyone in the CRM by name or phone (it used to live on the Leads tab).
+  const [q, setQ] = useState('');
+  const term = q.trim().toLowerCase();
+  const digits = term.replace(/\D/g, '');
+  const results = term
+    ? leads
+        .filter((l) => `${l.firstName} ${l.lastName}`.toLowerCase().includes(term) || (digits.length >= 3 && (l.phone ?? '').replace(/\D/g, '').includes(digits)))
+        .slice(0, 40)
+    : [];
   const [toast, setToast] = useState<{ text: string; undo: () => void } | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -55,6 +65,28 @@ export default function Pipeline() {
         title="Pipeline"
         kicker={`${PIPELINE.reduce((n, b) => n + (groups[b.id] ?? []).length, 0)} buyers`}
         right={<IconButton icon="plus" label="Add a lead" tone="soft" onPress={() => router.push({ pathname: '/lead/new', params: { stage: PIPELINE[idx]!.stage } })} />}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: c.card, borderRadius: 2, borderWidth: 1, borderColor: c.sep, paddingHorizontal: 12, minHeight: 44 }}>
+          <Icon name="search" size={16} color={c.sub} />
+          <TextInput value={q} onChangeText={setQ} placeholder="Search any lead by name or phone" placeholderTextColor={c.sub} accessibilityLabel="Search any lead" autoCorrect={false} style={[font('regular'), { flex: 1, fontSize: 16, color: c.text, minHeight: 44 }]} />
+          {q ? (
+            <Pressable accessibilityRole="button" accessibilityLabel="Clear search" onPress={() => setQ('')} hitSlop={10}>
+              <Icon name="close" size={16} color={c.sub} />
+            </Pressable>
+          ) : null}
+        </View>
+
+        {term ? (
+          <List>
+            {results.length ? (
+              results.map((l) => (
+                <ListRow key={l.id} label={`${l.firstName} ${l.lastName}`} sub={[l.stage, l.phone].filter(Boolean).join(' · ')} value={l.fields.potentialCommission ? money(l.fields.potentialCommission, false) : undefined} onPress={() => router.push(`/lead/${l.id}`)} />
+              ))
+            ) : (
+              <ListRow label={`No one matches "${q.trim()}"`} sub="Try a first name or the last 4 of their phone" />
+            )}
+          </List>
+        ) : (
+        <>
         {/* Potential commission: the number we never want an agent to miss. */}
         <Card style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 12 }}>
           <View style={{ flex: 1 }}>
@@ -119,7 +151,7 @@ export default function Pipeline() {
                       accessibilityLabel={`Move ${l.firstName} to ${next.label}`}
                       onPress={() => move(l, next)}
                       hitSlop={6}
-                      style={({ pressed }) => ({ minHeight: 28, paddingHorizontal: 10, borderRadius: 8, backgroundColor: c.hotSoft, flexDirection: 'row', alignItems: 'center', gap: 4, opacity: pressed ? 0.6 : 1 })}>
+                      style={({ pressed }) => ({ minHeight: 28, paddingHorizontal: 10, borderRadius: 2, backgroundColor: c.hotSoft, flexDirection: 'row', alignItems: 'center', gap: 4, opacity: pressed ? 0.6 : 1 })}>
                       <T w="semibold" size={13} tone="accent">
                         {next.label}
                       </T>
@@ -139,14 +171,16 @@ export default function Pipeline() {
         <T size={12} tone="sub" style={{ textAlign: 'center', marginTop: 4 }}>
           Tap the next step to move a lead forward, or ··· to pick any stage.
         </T>
+        </>
+        )}
       </Screen>
 
       {/* Stage sheet */}
       <Modal visible={sheet != null} transparent animationType="slide" onRequestClose={() => setSheet(null)}>
         <Pressable accessibilityLabel="Close" onPress={() => setSheet(null)} style={{ flex: 1, backgroundColor: c.dim }} />
         {sheet ? (
-          <View style={{ backgroundColor: c.bg, borderTopLeftRadius: 14, borderTopRightRadius: 14, paddingHorizontal: 16, paddingTop: 8, paddingBottom: insets.bottom + 16, gap: 10 }}>
-            <View style={{ alignSelf: 'center', width: 36, height: 5, borderRadius: 3, backgroundColor: c.sep }} />
+          <View style={{ backgroundColor: c.bg, borderTopLeftRadius: 2, borderTopRightRadius: 2, paddingHorizontal: 16, paddingTop: 8, paddingBottom: insets.bottom + 16, gap: 10 }}>
+            <View style={{ alignSelf: 'center', width: 36, height: 5, borderRadius: 2, backgroundColor: c.sep }} />
             <T w="semibold" size={17} style={{ textAlign: 'center' }}>
               Move {sheet.firstName} to…
             </T>
@@ -169,7 +203,7 @@ export default function Pipeline() {
       </Modal>
 
       {toast ? (
-        <View style={{ position: 'absolute', left: 12, right: 12, bottom: insets.bottom + 62, backgroundColor: c.text, borderRadius: 12, paddingLeft: 14, paddingRight: 4, minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        <View style={{ position: 'absolute', left: 12, right: 12, bottom: insets.bottom + 62, backgroundColor: c.text, borderRadius: 2, paddingLeft: 14, paddingRight: 4, minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           <T w="medium" size={14} style={{ color: c.bg, flex: 1 }}>
             {toast.text}
           </T>

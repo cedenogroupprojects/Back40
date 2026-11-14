@@ -92,7 +92,7 @@ export default function NewLead() {
       />
     );
   };
-  const group = (children: ReactNode) => <View style={{ backgroundColor: c.card, borderRadius: 14, overflow: 'hidden' }}>{children}</View>;
+  const group = (children: ReactNode) => <View style={{ backgroundColor: c.card, borderRadius: 2, overflow: 'hidden' }}>{children}</View>;
   const sep = (inset = 16) => <View style={{ height: HAIRLINE, backgroundColor: c.sep, marginLeft: inset }} />;
   const labeled = (label: string, child: ReactNode) => (
     <Row gap={0} style={{ minHeight: 48, paddingHorizontal: 16 }}>
@@ -138,7 +138,7 @@ export default function NewLead() {
       <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: insets.bottom + 32, gap: 22 }}>
         {/* Monogram fills in as you type */}
         <View style={{ alignItems: 'center', gap: 8, paddingTop: 6 }}>
-          <View style={{ width: 88, height: 88, borderRadius: 44, backgroundColor: mono ? c.hotSoft : c.soft, alignItems: 'center', justifyContent: 'center' }}>
+          <View style={{ width: 88, height: 88, borderRadius: 2, backgroundColor: mono ? c.hotSoft : c.soft, alignItems: 'center', justifyContent: 'center' }}>
             {mono ? (
               <T w="semibold" size={34} style={{ color: c.accentText }}>
                 {mono}

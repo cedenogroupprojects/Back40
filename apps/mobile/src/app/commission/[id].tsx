@@ -45,7 +45,7 @@ export default function Commission() {
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
       <Pressable accessibilityLabel="Close" onPress={() => router.back()} style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.35)' }} />
-      <View style={{ backgroundColor: c.bg, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingTop: 10, paddingBottom: insets.bottom + 16, gap: 14 }}>
+      <View style={{ backgroundColor: c.bg, borderTopLeftRadius: 2, borderTopRightRadius: 2, paddingHorizontal: 20, paddingTop: 10, paddingBottom: insets.bottom + 16, gap: 14 }}>
         <View style={{ alignSelf: 'center', width: 36, height: 4, borderRadius: 2, backgroundColor: c.track }} />
         <View style={{ gap: 2 }}>
           <T w="heavy" size={19}>
@@ -56,7 +56,7 @@ export default function Commission() {
           </T>
         </View>
 
-        <View style={{ backgroundColor: c.card, borderRadius: 16, overflow: 'hidden' }}>
+        <View style={{ backgroundColor: c.card, borderRadius: 2, overflow: 'hidden' }}>
           <Row style={line}>
             <T size={15} tone="body">
               Purchase price
