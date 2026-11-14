@@ -3,12 +3,13 @@
 // send (Follow Up Boss API), open the phone's Messages and log it instead.
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { Linking, Platform, TextInput, View } from 'react-native';
+import { TextInput, View } from 'react-native';
 
 import { Icon } from '@/components/Icon';
 import { Card, IconButton, Pill, Row, Screen, T, NavBar } from '@/components/ui';
 import { useStore } from '@/data/store';
 import { CRM_CAN_SEND, SOURCE_NAME } from '@/lib/crm';
+import { openOnPhone } from '@/lib/phone';
 import { useTheme } from '@/theme/ThemeProvider';
 import { font } from '@/theme/tokens';
 
@@ -19,19 +20,19 @@ function draftFor(first: string, me: string, opener?: string) {
 export default function Compose() {
   const { id, channel = 'text', body: preset } = useLocalSearchParams<{ id: string; channel?: 'text' | 'email'; body?: string }>();
   const { c } = useTheme();
-  const { lead: get, sendMessage, settings } = useStore();
+  const { lead: get, sendMessage, settings, canSendCrm } = useStore();
   const lead = get(id);
   const [body, setBody] = useState(preset ?? (lead ? draftFor(lead.firstName, settings.name, lead.aiOpener) : ''));
   const [subject, setSubject] = useState(lead ? `Following up, ${lead.firstName}` : '');
   const [sent, setSent] = useState(false);
   if (!lead) return null;
-  const viaCrm = CRM_CAN_SEND[lead.crm];
+  // Through the CRM a text goes out from the key owner's number, so only with your own key.
+  const crmCan = CRM_CAN_SEND[lead.crm];
+  const viaCrm = crmCan && canSendCrm;
 
   const send = async () => {
     if (!viaCrm) {
-      const url = channel === 'email' ? `mailto:${lead.email ?? ''}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}` : `sms:${lead.phone ?? ''}${Platform.OS === 'android' ? '?' : '&'}body=${encodeURIComponent(body)}`;
-      if (Platform.OS === 'web') window.location.href = url;
-      else await Linking.openURL(url).catch(() => undefined);
+      await openOnPhone(channel, channel === 'email' ? lead.email : lead.phone, body, subject);
     }
     sendMessage(lead.id, channel, body, { subject: channel === 'email' ? subject : undefined, fromPhone: !viaCrm });
     setSent(true);
@@ -61,7 +62,7 @@ export default function Compose() {
         onPress={send}
       />
       <T size={13} tone="sub" style={{ textAlign: 'center' }}>
-        {viaCrm ? `Sends from your ${SOURCE_NAME[lead.crm]} number and logs it there.` : lead.crm === 'manual' ? 'We open your phone and log it to the lead.' : `${SOURCE_NAME[lead.crm]} can't send messages from other apps, so we open your phone and log it to the lead.`}
+        {viaCrm ? `Sends from your ${SOURCE_NAME[lead.crm]} number and logs it there.` : lead.crm === 'manual' ? 'We open your phone and log it to the lead.' : crmCan ? `We open your phone and log it to ${SOURCE_NAME[lead.crm]}. To send from your ${SOURCE_NAME[lead.crm]} number, go to Me → Text from my number.` : `${SOURCE_NAME[lead.crm]} can't send messages from other apps, so we open your phone and log it to the lead.`}
       </T>
     </Screen>
   );

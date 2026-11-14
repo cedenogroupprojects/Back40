@@ -15,10 +15,11 @@ Deno.serve(async (req) => {
   const pre = preflight(req);
   if (pre) return pre;
   if (req.method !== 'POST') return json({ error: 'method' }, 405);
-  const { kind, apiKey, accountId: rawAccount, action } = (await req.json().catch(() => ({}))) as { kind?: CrmKind; apiKey?: string; accountId?: string; action?: 'connect' | 'disconnect' };
+  const { kind, apiKey, accountId: rawAccount, action } = (await req.json().catch(() => ({}))) as { kind?: CrmKind; apiKey?: string; accountId?: string; action?: 'connect' | 'disconnect' | 'personal' };
   if (!kind || !(kind in ADAPTERS)) return json({ error: 'Pick a CRM.' }, 400);
   if (action === 'disconnect') return disconnect(req, kind);
   const key = (apiKey ?? '').trim();
+  if (action === 'personal') return personal(req, kind, key);
   if (key.length < 10) return json({ error: 'That key looks too short. Copy the whole API key.' }, 400);
   // GoHighLevel (and white-label versions like Jtek) also needs the sub-account's Location ID.
   // Accept the ID itself or a pasted browser address that contains /location/<id>/.
@@ -179,4 +180,31 @@ async function disconnect(req: Request, kind: CrmKind) {
   await db.from('crm_connections').delete().eq('id', conn.id);
   if (kind !== 'gohighlevel') await db.from('members').update({ crm_user_id: null }).eq('org_id', member.org_id).eq('user_id', me);
   return json({ ok: true, removed: count ?? 0, webhooksRemoved: hooksRemoved });
+}
+
+/**
+ * An agent on a team adds their OWN CRM key, used only to send their texts and
+ * emails so they go out from their own number. Leads still sync through the team key.
+ */
+async function personal(req: Request, kind: CrmKind, key: string) {
+  const { data: me } = await userClient(req).rpc('uid');
+  if (!me) return json({ error: 'Sign in first.' }, 401);
+  if (kind !== 'lofty') return json({ error: 'Sending from your own number works with Lofty for now.' }, 400);
+  if (key.length < 10) return json({ error: 'That key looks too short. Copy the whole API key.' }, 400);
+  const db = serviceClient();
+  const { data: member } = await db.from('members').select('org_id, crm_user_id').eq('user_id', me).limit(1).maybeSingle();
+  if (!member) return json({ error: 'Join your team first.' }, 400);
+  const res = await fetch('https://api.lofty.com/v1.0/me', { headers: { Authorization: `token ${key}`, 'X-Error-Status': 'true' } }).catch(() => null);
+  if (!res || res.status === 401 || res.status === 403) return json({ error: "Lofty didn't accept that key. Double-check it and try again." }, 400);
+  const body = res.ok ? ((await res.json().catch(() => null)) as Record<string, unknown> | null) : null;
+  const id = body?.memberUserId ?? body?.userId;
+  const crmUserId = id != null ? String(id) : null;
+  if (!crmUserId) return json({ error: "Couldn't tell whose Lofty key this is. Try again in a minute." }, 400);
+  // It has to be YOUR key, the Lofty user your leads are assigned to.
+  if (member.crm_user_id && member.crm_user_id !== crmUserId) return json({ error: "That key belongs to a different Lofty user. Use the key from your own Lofty login." }, 400);
+  const { data: ref, error } = await db.rpc('store_crm_secret', { secret_name: `send:${member.org_id}:${me}:${kind}`, secret: key });
+  if (error || !ref) return json({ error: 'Could not save the key securely.' }, 500);
+  await db.from('member_send_keys').upsert({ org_id: member.org_id, user_id: me, kind, secret_ref: ref, crm_user_id: crmUserId }, { onConflict: 'org_id,user_id,kind' });
+  if (!member.crm_user_id) await db.from('members').update({ crm_user_id: crmUserId }).eq('org_id', member.org_id).eq('user_id', me);
+  return json({ ok: true });
 }

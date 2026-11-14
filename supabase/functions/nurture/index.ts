@@ -746,7 +746,7 @@ async function sendDueAuto() {
         org_id: lead.org_id, connection_id: lead.connection_id, lead_id: lead.id,
         op: d.channel === 'text' ? 'send_text' : 'send_email',
         idempotency_key: `nurture:${d.id}`,
-        payload: d.channel === 'text' ? { crmLeadId: lead.crm_lead_id, body: d.body } : { crmLeadId: lead.crm_lead_id, email: { subject: d.subject ?? '', body: d.body } },
+        payload: d.channel === 'text' ? { crmLeadId: lead.crm_lead_id, body: d.body, sender: d.user_id } : { crmLeadId: lead.crm_lead_id, email: { subject: d.subject ?? '', body: d.body }, sender: d.user_id },
       },
       { onConflict: 'idempotency_key', ignoreDuplicates: true },
     );

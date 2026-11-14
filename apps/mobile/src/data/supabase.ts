@@ -66,6 +66,15 @@ export async function signUp(name: string, email: string, password: string, team
   if (error) throw new Error(error.message);
 }
 
+// ───────────────────────── Sending from your own number ─────────────────────────
+
+/** CRM texts go out from the key owner's number, so agents send through the CRM only with their own key. */
+export async function canSendFromCrm(): Promise<boolean> {
+  const { data } = await supabase().rpc('can_send_from_crm');
+  return data === true;
+}
+export const addPersonalKey = (kind: string, apiKey: string) => fn('connect-crm', { kind, apiKey, action: 'personal' });
+
 // ───────────────────────── Team invites ─────────────────────────
 
 export type InviteInfo = { team: string; leader: string; name: string | null; email: string | null; leads: number; used: boolean };

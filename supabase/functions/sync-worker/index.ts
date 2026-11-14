@@ -9,6 +9,7 @@
 import { ADAPTERS, CrmError } from '../_shared/core/index.ts';
 import { backoffSeconds, credentialsFor, json, preflight, serviceClient, type Connection } from '../_shared/db.ts';
 import { importNotes, queueNotesImport, upsertLead } from '../_shared/sync.ts';
+import { senderCredentials } from '../_shared/sender.ts';
 
 const BACKFILL_MAX_PAGES = 50; // first import, per agent: up to 5,000 of their most recently active leads
 
@@ -145,8 +146,19 @@ async function processOutbox() {
     try {
       const conn = await connection(job.connection_id);
       const adapter = ADAPTERS[conn.kind];
-      const creds = await credentialsFor(db, conn);
-      const p = job.payload as Record<string, unknown> & { crmLeadId: string };
+      const p = job.payload as Record<string, unknown> & { crmLeadId: string; sender?: string };
+      const sending = job.op === 'send_text' || job.op === 'send_email';
+      // A message must go out from the sender's own CRM user, never someone else's number.
+      let sender = p.sender;
+      if (sending && !sender && job.lead_id) {
+        const { data: l } = await db.from('leads').select('assigned_user_id').eq('id', job.lead_id).maybeSingle();
+        sender = (l?.assigned_user_id as string | null) ?? undefined;
+      }
+      const creds = sending ? await senderCredentials(db, conn, sender) : await credentialsFor(db, conn);
+      if (!creds) {
+        await db.from('sync_outbox').update({ status: 'failed', last_error: 'not_sent: sender has no CRM key of their own' }).eq('id', job.id);
+        continue;
+      }
       await throttle(conn.id, adapter.capabilities.maxRequestsPerMinute);
       switch (job.op) {
         case 'add_note': await adapter.addNote(creds, p.crmLeadId, p.body as string); break;

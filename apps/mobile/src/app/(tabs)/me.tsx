@@ -57,7 +57,7 @@ function Stepper({ value, onChange, disabled }: { value: number; onChange: (v: n
 
 export default function Me() {
   const { c, mode, setMode } = useTheme();
-  const { settings, stages, updateSettings, isLiveMode, profile, signOut } = useStore();
+  const { settings, stages, updateSettings, isLiveMode, profile, signOut, canSendCrm } = useStore();
   const canSetGoal = settings.role === 'owner' || settings.role === 'admin' || settings.role === 'solo';
   const leader = settings.role === 'owner' || settings.role === 'admin';
   const [roster, setRoster] = useState<{ joined: number; total: number } | null>(null);
@@ -81,6 +81,12 @@ export default function Me() {
           sub={`${settings.role === 'owner' || settings.role === 'admin' ? 'Team leader' : settings.role === 'solo' ? 'Solo agent' : 'Agent'}${profile?.teamName ? ` · ${profile.teamName}` : ' · Pro plan'}`}
         />
       </List>
+
+      {settings.role === 'agent' ? (
+        <List>
+          <ListRow label="Text from my number" sub={canSendCrm ? 'On · texts go out from your Lofty number' : 'Add your Lofty key so texts come from you'} onPress={() => router.push('/my-number')} />
+        </List>
+      ) : null}
 
       {settings.role === 'owner' || settings.role === 'admin' ? (
         <List>

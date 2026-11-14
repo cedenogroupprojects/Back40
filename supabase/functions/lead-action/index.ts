@@ -16,7 +16,8 @@
 //   message     { channel: 'text'|'email', body, subject? }
 //               sends through the CRM when it can; otherwise logs what the
 //               agent sent from their phone.
-import { json, preflight, serviceClient, userClient } from '../_shared/db.ts';
+import { json, preflight, serviceClient, userClient, type Connection } from '../_shared/db.ts';
+import { canSend } from '../_shared/sender.ts';
 
 // Mirrors each adapter's capabilities (kept inline so this function stays small).
 const CAN_SEND: Record<string, { text: boolean; email: boolean }> = {
@@ -105,10 +106,17 @@ Deno.serve(async (req) => {
       const text = (b.body ?? '').trim();
       if (!text || !b.channel) return json({ error: 'body' }, 400);
       const can = CAN_SEND[lead.crm]?.[b.channel] ?? false;
+      if (can && !b.sentFromPhone) {
+        // Through the CRM it goes out from the key owner's number, so only with your own key.
+        const { data: conn } = await db.from('crm_connections').select('*').eq('id', lead.connection_id).maybeSingle();
+        if (!conn || !(await canSend(db, conn as Connection, me))) {
+          return json({ error: 'Texts from Back 40 go out from your own number, so connect your Lofty first (Me → Text from my number). Or send it from your phone.', code: 'own_number' }, 409);
+        }
+      }
       await db.from('leads').update({ last_contact_at: now, updated_at: now }).eq('id', lead.id);
       await timeline(b.channel, b.channel === 'text' ? 'You texted' : 'You emailed', text);
       if (can && !b.sentFromPhone) {
-        await queue(b.channel === 'text' ? 'send_text' : 'send_email', b.channel === 'text' ? { body: text } : { email: { subject: b.subject ?? '', body: text } });
+        await queue(b.channel === 'text' ? 'send_text' : 'send_email', b.channel === 'text' ? { body: text, sender: me } : { email: { subject: b.subject ?? '', body: text }, sender: me });
       } else {
         await queue('add_note', { body: `${b.channel === 'text' ? 'Text' : 'Email'} sent from phone (Back 40): ${text}` });
       }

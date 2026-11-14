@@ -4,6 +4,8 @@
 //   CRM) and every edit goes through the server, which writes it to the CRM.
 // Screens only talk to this store, so they don't care which mode is on.
 import { AppState } from 'react-native';
+import { CRM_CAN_SEND } from '@/lib/crm';
+import { openOnPhone } from '@/lib/phone';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   DEFAULT_RULES,
@@ -92,7 +94,10 @@ type Store = {
   /** Add a lead by hand. Returns the new lead's id (or throws with a readable message). */
   addLead: (input: NewLead) => Promise<string>;
   sendMessage: (leadId: string, channel: 'text' | 'email', body: string, opts?: { subject?: string; fromPhone?: boolean }) => void;
-  decideDraft: (id: string, decision: 'sent' | 'skipped', body?: string) => void;
+  decideDraft: (id: string, decision: 'sent' | 'skipped', body?: string, opts?: { fromPhone?: boolean }) => void;
+  /** True when CRM texts would go out from this person's own number (their own key). */
+  canSendCrm: boolean;
+  refreshCanSend: () => void;
   /** Swap the home on a nurture message; the message is rewritten around it. */
   swapHome: (draftId: string, homeId: string) => Promise<void>;
   /** Look up homes for a message (also one written without a home). Returns an error to show, if any. */
@@ -124,6 +129,10 @@ const DEFAULT_SETTINGS: Settings = {
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<Status>(live.isLive ? 'loading' : 'demo');
   const [profile, setProfile] = useState<live.Profile | null>(null);
+  const [canSendLive, setCanSendLive] = useState(false);
+  const refreshCanSend = useCallback(() => {
+    void live.canSendFromCrm().then(setCanSendLive).catch(() => setCanSendLive(false));
+  }, []);
   const [notice, setNotice] = useState<string | null>(null);
   const [settings, setSettings] = useState<Settings>(live.isLive ? DEFAULT_SETTINGS : { ...DEFAULT_SETTINGS, name: 'Taylor', initials: 'TM' });
   const [onboarded, setOnboarded] = useState(true);
@@ -160,6 +169,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       }
       if (!p) throw new Error('Could not load your team.');
       setProfile(p);
+      refreshCanSend();
       const parts = p.name.split(/\s+/);
       setSettings((s) => ({
         ...s,
@@ -379,15 +389,21 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   };
 
   const sendMessage: Store['sendMessage'] = (leadId, channel, body, opts) => {
+    // Never send through someone else's CRM number: without your own key, open your phone instead.
+    const target = leads.find((l) => l.id === leadId);
+    if (!opts?.fromPhone && isLiveMode && !(canSendLive && target && CRM_CAN_SEND[target.crm])) {
+      void openOnPhone(channel, channel === 'email' ? target?.email : target?.phone, body, opts?.subject ?? '');
+      opts = { ...opts, fromPhone: true };
+    }
     pushTimeline(leadId, { kind: channel, title: channel === 'text' ? 'You texted' : 'You emailed', body });
     setLeads((ls) => ls.map((l) => (l.id === leadId ? { ...l, lastContactAt: new Date().toISOString(), touches: l.touches + 1 } : l)));
     remote(live.leadAction(leadId, 'message', { channel, body, subject: opts?.subject, sentFromPhone: opts?.fromPhone }));
   };
 
-  const decideDraft: Store['decideDraft'] = (id, decision, body) => {
+  const decideDraft: Store['decideDraft'] = (id, decision, body, opts) => {
     const d = drafts.find((x) => x.id === id);
     setDrafts((ds) => ds.map((x) => (x.id === id ? { ...x, status: decision, body: body ?? x.body } : x)));
-    if (d && decision === 'sent') sendMessage(d.leadId, d.channel, body ?? d.body, { subject: d.subject });
+    if (d && decision === 'sent') sendMessage(d.leadId, d.channel, body ?? d.body, { subject: d.subject, fromPhone: opts?.fromPhone });
     if (liveRef.current) remote(Promise.resolve(live.supabase().from('drafts').update({ status: decision === 'sent' ? (body ? 'edited_sent' : 'sent') : 'skipped', decided_at: new Date().toISOString() }).eq('id', id)));
   };
 
@@ -445,6 +461,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   } else streak = 5;
 
   const value: Store = {
+    canSendCrm: !isLiveMode || canSendLive, refreshCanSend,
     status, isLiveMode, profile, notice, clearNotice: () => setNotice(null), enterDemo, reload, loadTimeline, signOut,
     settings, onboarded, leads, today, moreToday, dealsFor, pipeline, stages, drafts, nudges, team, stale, lead,
     week,

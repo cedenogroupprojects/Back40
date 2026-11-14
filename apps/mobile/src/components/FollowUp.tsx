@@ -12,7 +12,8 @@ import { Icon } from '@/components/Icon';
 import { Avatar, Card, IconButton, Pill, Row, Screen, T, NavBar, List, ListRow, SectionLabel } from '@/components/ui';
 import { initials, money, useStore } from '@/data/store';
 import * as live from '@/data/supabase';
-import { SOURCE_NAME } from '@/lib/crm';
+import { CRM_CAN_SEND, SOURCE_NAME } from '@/lib/crm';
+import { openOnPhone } from '@/lib/phone';
 import { useTheme } from '@/theme/ThemeProvider';
 import { font } from '@/theme/tokens';
 
@@ -177,7 +178,10 @@ function HomeSwap({ draft, onChanged }: { draft: Draft; onChanged: () => void })
 
 export function FollowUpQueue({ inTab = false }: { inTab?: boolean }) {
   const { c } = useTheme();
-  const { drafts, lead: get, decideDraft } = useStore();
+  const { drafts, lead: get, decideDraft, canSendCrm } = useStore();
+  // Through the CRM a text goes out from the key owner's number, so it only sends
+  // that way with your own key; otherwise it opens your phone with the text ready.
+  const viaCrm = (leadCrm?: string) => canSendCrm && !!leadCrm && !!CRM_CAN_SEND[leadCrm as keyof typeof CRM_CAN_SEND];
   const pending = drafts.filter((d) => d.status === 'pending');
   const total = drafts.length;
   const d = pending[0];
@@ -224,7 +228,11 @@ export function FollowUpQueue({ inTab = false }: { inTab?: boolean }) {
     const ok = await stillAvailable(id, x.home?.kind === 'listing');
     setSending(false);
     if (!ok) return;
-    decideDraft(id, 'sent', edited);
+    const l = get(x.leadId);
+    if (!viaCrm(l?.crm)) {
+      await openOnPhone(x.channel, x.channel === 'email' ? l?.email : l?.phone, edited ?? x.body, x.subject ?? '');
+      decideDraft(id, 'sent', edited, { fromPhone: true });
+    } else decideDraft(id, 'sent', edited);
     setEditing(false);
   };
   const sendAll = async () => {
@@ -337,12 +345,20 @@ export function FollowUpQueue({ inTab = false }: { inTab?: boolean }) {
             <Row>
               <Pill label="Skip" kind="soft" onPress={() => { setEditing(false); decideDraft(d.id, 'skipped'); }} style={{ flex: 1 }} />
               <Pill label={editing ? 'Done' : 'Edit'} kind="soft" onPress={() => { if (!editing) setBody(shown?.body ?? d.body); setEditing((v) => !v); }} style={{ flex: 1 }} />
-              <Pill label={sending ? 'Checking…' : 'Send'} icon="send" disabled={sending} onPress={() => void sendOne(d.id, editing ? body : pick > 0 ? shown?.body : undefined)} style={{ flex: 2 }} />
+              <Pill label={sending ? 'Checking…' : viaCrm(lead.crm) ? 'Send' : 'Text from phone'} icon="send" disabled={sending} onPress={() => void sendOne(d.id, editing ? body : pick > 0 ? shown?.body : undefined)} style={{ flex: 2 }} />
             </Row>
           </Card>
+          {!viaCrm(lead.crm) && lead.crm !== 'manual' && CRM_CAN_SEND[lead.crm as keyof typeof CRM_CAN_SEND] ? (
+            <T size={13} tone="sub" style={{ textAlign: 'center' }}>
+              Opens your phone with the text ready.{' '}
+              <T size={13} tone="accent" onPress={() => router.push('/my-number')}>
+                {`Send from your ${SOURCE_NAME[lead.crm]} number instead`}
+              </T>
+            </T>
+          ) : null}
           {pending.length > 1 ? (
             <>
-              <Pill label={confirmAll ? `Tap again to send all ${pending.length}` : `Send all ${pending.length}`} kind={confirmAll ? 'primary' : 'soft'} onPress={sendAll} />
+              {viaCrm(lead.crm) ? <Pill label={confirmAll ? `Tap again to send all ${pending.length}` : `Send all ${pending.length}`} kind={confirmAll ? 'primary' : 'soft'} onPress={sendAll} /> : null}
               {confirmAll ? (
                 <T size={13} tone="sub" style={{ textAlign: 'center', marginTop: -6 }}>
                   Sends every message below as written.{' '}

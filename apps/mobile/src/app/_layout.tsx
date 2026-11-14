@@ -31,6 +31,7 @@ function AppStack() {
         <Stack.Screen name="compose/[id]" options={{ presentation: 'modal' }} />
         <Stack.Screen name="admin" />
         <Stack.Screen name="team" />
+        <Stack.Screen name="my-number" />
         <Stack.Screen name="join" options={{ animation: 'fade' }} />
         <Stack.Screen name="nurture" />
         <Stack.Screen name="sign-in" options={{ animation: 'fade' }} />
