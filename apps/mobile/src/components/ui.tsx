@@ -102,7 +102,7 @@ export function Pill({ label, kind = 'primary', icon, onPress, style, size = 'md
       disabled={disabled}
       onPress={onPress}
       style={({ pressed }) => [
-        { minHeight: h, borderRadius: 2, backgroundColor: bg, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, opacity: disabled ? 0.4 : pressed ? 0.75 : 1 },
+        { minHeight: h, borderRadius: 4, backgroundColor: bg, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, opacity: disabled ? 0.4 : pressed ? 0.75 : 1 },
         kind === 'ghost' && { borderWidth: 1, borderColor: c.sep },
         style,
       ]}>
@@ -121,7 +121,7 @@ export function Chip({ label, on, onPress, count }: { label: string; on: boolean
       accessibilityState={{ selected: on }}
       onPress={onPress}
       hitSlop={4}
-      style={{ minHeight: 32, paddingHorizontal: 11, borderRadius: 2, flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: on ? c.text : c.card, borderWidth: on ? 0 : HAIRLINE, borderColor: c.sep }}>
+      style={{ minHeight: 32, paddingHorizontal: 11, borderRadius: 4, flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: on ? c.text : c.card, borderWidth: on ? 0 : HAIRLINE, borderColor: c.sep }}>
       <Text style={[font('medium'), { fontSize: 13, color: on ? c.bg : c.text }]}>{label}</Text>
       {count !== undefined ? <Text style={[font('medium'), { fontSize: 13, color: on ? c.bg : c.sub, opacity: on ? 0.6 : 1 }]}>{count}</Text> : null}
     </Pressable>
@@ -131,7 +131,7 @@ export function Chip({ label, on, onPress, count }: { label: string; on: boolean
 export function Avatar({ initials, size = 44, bg, fg }: { initials: string; size?: number; bg?: string; fg?: string }) {
   const { c } = useTheme();
   return (
-    <View style={{ width: size, height: size, borderRadius: 2, backgroundColor: bg ?? c.soft, alignItems: 'center', justifyContent: 'center' }}>
+    <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: bg ?? c.soft, alignItems: 'center', justifyContent: 'center' }}>
       <Text style={[font('semibold'), { fontSize: size * 0.38, color: fg ?? c.sub }]}>{initials}</Text>
     </View>
   );
@@ -139,7 +139,7 @@ export function Avatar({ initials, size = 44, bg, fg }: { initials: string; size
 
 /** Status dot: hot (coral), promised (blue), back looking (amber), going cold (gray). */
 export function Dot({ color, size = 8 }: { color: string; size?: number }) {
-  return <View style={{ width: size, height: size, borderRadius: 2, backgroundColor: color }} />;
+  return <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: color }} />;
 }
 
 export function IconButton({ icon, label, onPress, tone = 'plain' }: { icon: IconName; label: string; onPress?: () => void; tone?: 'plain' | 'card' | 'soft' }) {
@@ -150,7 +150,7 @@ export function IconButton({ icon, label, onPress, tone = 'plain' }: { icon: Ico
       accessibilityLabel={label}
       onPress={onPress}
       hitSlop={8}
-      style={({ pressed }) => ({ width: 36, height: 36, borderRadius: 2, backgroundColor: tone === 'card' ? c.card : tone === 'soft' ? c.soft : 'transparent', alignItems: 'center', justifyContent: 'center', opacity: pressed ? 0.6 : 1 })}>
+      style={({ pressed }) => ({ width: 36, height: 36, borderRadius: 6, backgroundColor: tone === 'card' ? c.card : tone === 'soft' ? c.soft : 'transparent', alignItems: 'center', justifyContent: 'center', opacity: pressed ? 0.6 : 1 })}>
       <Icon name={icon} size={22} color={tone === 'plain' ? c.accent : c.text} />
     </Pressable>
   );
@@ -160,7 +160,7 @@ export function IconButton({ icon, label, onPress, tone = 'plain' }: { icon: Ico
 export function CallButton({ onPress, label }: { onPress: () => void; label: string }) {
   const { c } = useTheme();
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onPress} hitSlop={6} style={({ pressed }) => ({ width: 34, height: 34, borderRadius: 2, backgroundColor: c.hotSoft, alignItems: 'center', justifyContent: 'center', opacity: pressed ? 0.6 : 1 })}>
+    <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onPress} hitSlop={6} style={({ pressed }) => ({ width: 34, height: 34, borderRadius: 6, backgroundColor: c.hotSoft, alignItems: 'center', justifyContent: 'center', opacity: pressed ? 0.6 : 1 })}>
       <Icon name="phone" size={16} color={c.accentText} />
     </Pressable>
   );
@@ -175,7 +175,7 @@ export function List({ children, style, inset = 16 }: { children: ReactNode; sty
   const { c } = useTheme();
   const items = (Array.isArray(children) ? children : [children]).flat().filter(Boolean);
   return (
-    <View style={[{ backgroundColor: c.card, borderRadius: 2, overflow: 'hidden' }, style]}>
+    <View style={[{ backgroundColor: c.card, borderRadius: 4, overflow: 'hidden' }, style]}>
       {items.map((child, i) => (
         <View key={i}>
           {i ? <View style={{ height: HAIRLINE, backgroundColor: c.sep, marginLeft: inset }} /> : null}
@@ -223,7 +223,7 @@ export function ListRow({ label, value, valueTone, onPress, right, sub, left, de
 export function Segmented<K extends string>({ options, value, onChange }: { options: { key: K; label: string }[]; value: K; onChange: (k: K) => void }) {
   const { c } = useTheme();
   return (
-    <View style={{ flexDirection: 'row', backgroundColor: c.soft, borderRadius: 2, padding: 2 }}>
+    <View style={{ flexDirection: 'row', backgroundColor: c.soft, borderRadius: 4, padding: 2 }}>
       {options.map((o) => {
         const on = o.key === value;
         return (
@@ -232,7 +232,7 @@ export function Segmented<K extends string>({ options, value, onChange }: { opti
             accessibilityRole="radio"
             accessibilityState={{ selected: on }}
             onPress={() => onChange(o.key)}
-            style={{ flex: 1, minHeight: 32, borderRadius: 2, backgroundColor: on ? c.card : 'transparent', alignItems: 'center', justifyContent: 'center', boxShadow: on ? '0 1px 2px rgba(0,0,0,0.12)' : undefined }}>
+            style={{ flex: 1, minHeight: 32, borderRadius: 4, backgroundColor: on ? c.card : 'transparent', alignItems: 'center', justifyContent: 'center', boxShadow: on ? '0 1px 2px rgba(0,0,0,0.12)' : undefined }}>
             <Text style={[font(on ? 'semibold' : 'medium'), { fontSize: 13, color: on ? c.text : c.sub }]}>{o.label}</Text>
           </Pressable>
         );
@@ -264,5 +264,5 @@ export function Divider() {
 }
 
 const styles = StyleSheet.create({
-  card: { borderRadius: 2, padding: 14, gap: 8 },
+  card: { borderRadius: 4, padding: 14, gap: 8 },
 });

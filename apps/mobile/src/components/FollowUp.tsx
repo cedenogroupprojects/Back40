@@ -24,11 +24,11 @@ function Home({ h }: { h: HomeCard }) {
   const price = h.price ? money(h.price, false) : h.priceFrom ? `From ${money(h.priceFrom, false)}` : null;
   const facts = [price, h.beds ? `${h.beds} bd` : null, h.baths ? `${h.baths} ba` : null].filter(Boolean).join(' · ');
   const body = (
-    <Row gap={12} style={{ backgroundColor: c.soft, borderRadius: 2, padding: 10 }}>
+    <Row gap={12} style={{ backgroundColor: c.soft, borderRadius: 4, padding: 10 }}>
       {h.photo ? (
-        <Image source={{ uri: h.photo }} style={{ width: 64, height: 64, borderRadius: 2, backgroundColor: c.track }} accessibilityIgnoresInvertColors />
+        <Image source={{ uri: h.photo }} style={{ width: 64, height: 64, borderRadius: 4, backgroundColor: c.track }} accessibilityIgnoresInvertColors />
       ) : (
-        <View style={{ width: 64, height: 64, borderRadius: 2, backgroundColor: c.card, alignItems: 'center', justifyContent: 'center' }}>
+        <View style={{ width: 64, height: 64, borderRadius: 4, backgroundColor: c.card, alignItems: 'center', justifyContent: 'center' }}>
           <Icon name={h.kind === 'community' ? 'board' : 'today'} size={24} color={c.sub} />
         </View>
       )}
@@ -107,7 +107,7 @@ function HomeSwap({ draft, onChanged }: { draft: Draft; onChanged: () => void })
       <Pressable
         accessibilityRole="button"
         onPress={() => void toggle()}
-        style={({ pressed }) => ({ minHeight: 48, borderRadius: 2, borderWidth: 1.5, borderColor: open ? c.text : c.sep, backgroundColor: c.card, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, opacity: pressed ? 0.7 : 1 })}>
+        style={({ pressed }) => ({ minHeight: 48, borderRadius: 4, borderWidth: 1.5, borderColor: open ? c.text : c.sep, backgroundColor: c.card, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, opacity: pressed ? 0.7 : 1 })}>
         <Icon name={open ? 'close' : current ? 'board' : 'plus'} size={17} color={c.text} width={2.2} />
         <T w="bold" size={15}>
           {open ? 'Keep it as is' : current ? 'Swap home' : 'Add a home'}
@@ -128,11 +128,11 @@ function HomeSwap({ draft, onChanged }: { draft: Draft; onChanged: () => void })
               const facts = [h.price ? money(h.price, false) : null, h.beds ? `${h.beds} bd` : null, h.baths ? `${h.baths} ba` : null, h.sqft ? `${h.sqft.toLocaleString('en-US')} sqft` : null].filter(Boolean).join(' · ');
               return (
                 <Pressable key={h.id} accessibilityRole="button" accessibilityState={{ selected: on }} accessibilityLabel={`Use ${h.title}`} onPress={() => void pick(h.id)}>
-                  <Row gap={12} style={{ borderRadius: 2, padding: 10, backgroundColor: on ? c.soft : c.card, borderWidth: 1.5, borderColor: on ? c.text : c.sep }}>
+                  <Row gap={12} style={{ borderRadius: 4, padding: 10, backgroundColor: on ? c.soft : c.card, borderWidth: 1.5, borderColor: on ? c.text : c.sep }}>
                     {h.photo ? (
-                      <Image source={{ uri: h.photo }} style={{ width: 72, height: 72, borderRadius: 2, backgroundColor: c.track }} accessibilityIgnoresInvertColors />
+                      <Image source={{ uri: h.photo }} style={{ width: 72, height: 72, borderRadius: 4, backgroundColor: c.track }} accessibilityIgnoresInvertColors />
                     ) : (
-                      <View style={{ width: 72, height: 72, borderRadius: 2, backgroundColor: c.soft }} />
+                      <View style={{ width: 72, height: 72, borderRadius: 4, backgroundColor: c.soft }} />
                     )}
                     <View style={{ flex: 1, gap: 2 }}>
                       {h.badge ? (
@@ -308,9 +308,9 @@ export function FollowUpQueue({ inTab = false }: { inTab?: boolean }) {
               </Row>
             ) : null}
             {editing ? (
-              <TextInput value={body} onChangeText={setBody} multiline autoFocus accessibilityLabel="Edit message" style={{ ...font('medium'), fontSize: 15, color: c.text, backgroundColor: c.soft, borderRadius: 2, padding: 14, minHeight: 120, textAlignVertical: 'top' }} />
+              <TextInput value={body} onChangeText={setBody} multiline autoFocus accessibilityLabel="Edit message" style={{ ...font('medium'), fontSize: 15, color: c.text, backgroundColor: c.soft, borderRadius: 6, padding: 14, minHeight: 120, textAlignVertical: 'top' }} />
             ) : (
-              <View style={{ alignSelf: 'flex-end', maxWidth: '88%', backgroundColor: c.hero, borderRadius: 2, borderBottomRightRadius: 2, paddingHorizontal: 13, paddingVertical: 9 }}>
+              <View style={{ alignSelf: 'flex-end', maxWidth: '88%', backgroundColor: c.hero, borderRadius: 6, borderBottomRightRadius: 5, paddingHorizontal: 13, paddingVertical: 9 }}>
                 {shown?.subject ? (
                   <T w="semibold" size={15} style={{ color: c.onHero }}>
                     {shown.subject}

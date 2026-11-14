@@ -65,7 +65,7 @@ export default function Pipeline() {
         title="Pipeline"
         kicker={`${PIPELINE.reduce((n, b) => n + (groups[b.id] ?? []).length, 0)} buyers`}
         right={<IconButton icon="plus" label="Add a lead" tone="soft" onPress={() => router.push({ pathname: '/lead/new', params: { stage: PIPELINE[idx]!.stage } })} />}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: c.card, borderRadius: 2, borderWidth: 1, borderColor: c.sep, paddingHorizontal: 12, minHeight: 44 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: c.card, borderRadius: 4, borderWidth: 1, borderColor: c.sep, paddingHorizontal: 12, minHeight: 44 }}>
           <Icon name="search" size={16} color={c.sub} />
           <TextInput value={q} onChangeText={setQ} placeholder="Search any lead by name or phone" placeholderTextColor={c.sub} accessibilityLabel="Search any lead" autoCorrect={false} style={[font('regular'), { flex: 1, fontSize: 16, color: c.text, minHeight: 44 }]} />
           {q ? (
@@ -151,7 +151,7 @@ export default function Pipeline() {
                       accessibilityLabel={`Move ${l.firstName} to ${next.label}`}
                       onPress={() => move(l, next)}
                       hitSlop={6}
-                      style={({ pressed }) => ({ minHeight: 28, paddingHorizontal: 10, borderRadius: 2, backgroundColor: c.hotSoft, flexDirection: 'row', alignItems: 'center', gap: 4, opacity: pressed ? 0.6 : 1 })}>
+                      style={({ pressed }) => ({ minHeight: 28, paddingHorizontal: 10, borderRadius: 4, backgroundColor: c.hotSoft, flexDirection: 'row', alignItems: 'center', gap: 4, opacity: pressed ? 0.6 : 1 })}>
                       <T w="semibold" size={13} tone="accent">
                         {next.label}
                       </T>
@@ -179,8 +179,8 @@ export default function Pipeline() {
       <Modal visible={sheet != null} transparent animationType="slide" onRequestClose={() => setSheet(null)}>
         <Pressable accessibilityLabel="Close" onPress={() => setSheet(null)} style={{ flex: 1, backgroundColor: c.dim }} />
         {sheet ? (
-          <View style={{ backgroundColor: c.bg, borderTopLeftRadius: 2, borderTopRightRadius: 2, paddingHorizontal: 16, paddingTop: 8, paddingBottom: insets.bottom + 16, gap: 10 }}>
-            <View style={{ alignSelf: 'center', width: 36, height: 5, borderRadius: 2, backgroundColor: c.sep }} />
+          <View style={{ backgroundColor: c.bg, borderTopLeftRadius: 4, borderTopRightRadius: 4, paddingHorizontal: 16, paddingTop: 8, paddingBottom: insets.bottom + 16, gap: 10 }}>
+            <View style={{ alignSelf: 'center', width: 36, height: 5, borderRadius: 3, backgroundColor: c.sep }} />
             <T w="semibold" size={17} style={{ textAlign: 'center' }}>
               Move {sheet.firstName} to…
             </T>
@@ -203,7 +203,7 @@ export default function Pipeline() {
       </Modal>
 
       {toast ? (
-        <View style={{ position: 'absolute', left: 12, right: 12, bottom: insets.bottom + 62, backgroundColor: c.text, borderRadius: 2, paddingLeft: 14, paddingRight: 4, minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        <View style={{ position: 'absolute', left: 12, right: 12, bottom: insets.bottom + 62, backgroundColor: c.text, borderRadius: 4, paddingLeft: 14, paddingRight: 4, minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           <T w="medium" size={14} style={{ color: c.bg, flex: 1 }}>
             {toast.text}
           </T>

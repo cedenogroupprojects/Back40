@@ -23,7 +23,7 @@ const TabButton = forwardRef<ComponentRef<typeof Pressable>, TabTriggerSlotProps
         <View>
           <Icon name={icon} size={23} color={color} width={isFocused ? 2.1 : 1.8} />
           {badge ? (
-            <View style={{ position: 'absolute', top: -4, right: -10, minWidth: 18, height: 18, borderRadius: 2, paddingHorizontal: 5, backgroundColor: c.accent, alignItems: 'center', justifyContent: 'center' }}>
+            <View style={{ position: 'absolute', top: -4, right: -10, minWidth: 18, height: 18, borderRadius: 4, paddingHorizontal: 5, backgroundColor: c.accent, alignItems: 'center', justifyContent: 'center' }}>
               <Text style={[font('bold'), { fontSize: 11, color: '#FFFFFF' }]}>{badge > 99 ? '99+' : badge}</Text>
             </View>
           ) : null}

@@ -147,7 +147,7 @@ export default function Today() {
             </T>
           </View>
           {total ? (
-            <View style={{ width: 54, height: 54, borderRadius: 2, backgroundColor: ink, alignItems: 'center', justifyContent: 'center' }}>
+            <View style={{ width: 54, height: 54, borderRadius: 6, backgroundColor: ink, alignItems: 'center', justifyContent: 'center' }}>
               <T w="heavy" size={16} style={{ color: onInk }}>
                 {done ? total : i + 1}/{total}
               </T>
@@ -164,7 +164,7 @@ export default function Today() {
       </View>
 
       {needsCrm ? (
-        <View style={{ flex: 1, margin: 16, marginTop: 18, borderRadius: 2, backgroundColor: ink, padding: 24, gap: 14, justifyContent: 'center' }}>
+        <View style={{ flex: 1, margin: 16, marginTop: 18, borderRadius: 6, backgroundColor: ink, padding: 24, gap: 14, justifyContent: 'center' }}>
           <T w="heavy" size={28} style={{ color: onInk }}>
             Bring in your leads
           </T>
@@ -175,8 +175,8 @@ export default function Today() {
         </View>
       ) : done ? (
         <View style={{ flex: 1, marginHorizontal: 16, marginTop: 18, gap: 12 }}>
-          <View style={{ backgroundColor: ink, borderRadius: 2, padding: 24, gap: 14 }}>
-            <View style={{ width: 52, height: 52, borderRadius: 2, backgroundColor: c.accent, alignItems: 'center', justifyContent: 'center' }}>
+          <View style={{ backgroundColor: ink, borderRadius: 6, padding: 24, gap: 14 }}>
+            <View style={{ width: 52, height: 52, borderRadius: 6, backgroundColor: c.accent, alignItems: 'center', justifyContent: 'center' }}>
               <Icon name="check" size={26} color="#FFFFFF" width={2.8} />
             </View>
             <T w="heavy" size={30} style={{ color: onInk }}>
@@ -193,7 +193,7 @@ export default function Today() {
           </View>
           <BigButton label="Give me 5 more" onPress={() => { moreToday(); }} />
           {pending.length ? (
-            <Pressable accessibilityRole="button" onPress={() => router.push('/approve')} style={({ pressed }) => ({ minHeight: 60, borderRadius: 2, borderWidth: 1, borderColor: c.sep, backgroundColor: c.card, paddingHorizontal: 18, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', opacity: pressed ? 0.7 : 1 })}>
+            <Pressable accessibilityRole="button" onPress={() => router.push('/approve')} style={({ pressed }) => ({ minHeight: 60, borderRadius: 6, borderWidth: 1, borderColor: c.sep, backgroundColor: c.card, paddingHorizontal: 18, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', opacity: pressed ? 0.7 : 1 })}>
               <T w="bold" size={16}>
                 {pending.length} follow-ups to approve
               </T>
@@ -209,7 +209,7 @@ export default function Today() {
           </Pressable>
         </View>
       ) : !cur ? (
-        <View style={{ flex: 1, margin: 16, marginTop: 18, borderRadius: 2, backgroundColor: c.card, padding: 24, gap: 10, justifyContent: 'center' }}>
+        <View style={{ flex: 1, margin: 16, marginTop: 18, borderRadius: 6, backgroundColor: c.card, padding: 24, gap: 10, justifyContent: 'center' }}>
           <T w="heavy" size={24}>
             Nobody needs a call right now
           </T>
@@ -220,8 +220,8 @@ export default function Today() {
       ) : (
         <View style={{ flex: 1, marginHorizontal: 16, marginTop: 18 }}>
           {/* The stack behind */}
-          {total - i > 2 ? <View style={{ position: 'absolute', left: 18, right: 18, top: 22, bottom: 96, borderRadius: 2, backgroundColor: c.sep }} /> : null}
-          {total - i > 1 ? <View style={{ position: 'absolute', left: 9, right: 9, top: 11, bottom: 108, borderRadius: 2, backgroundColor: isDark ? '#5E7889' : '#5A5654' }} /> : null}
+          {total - i > 2 ? <View style={{ position: 'absolute', left: 18, right: 18, top: 22, bottom: 96, borderRadius: 6, backgroundColor: c.sep }} /> : null}
+          {total - i > 1 ? <View style={{ position: 'absolute', left: 9, right: 9, top: 11, bottom: 108, borderRadius: 6, backgroundColor: isDark ? '#5E7889' : '#5A5654' }} /> : null}
 
           <Animated.View {...pan.panHandlers} style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 120, transform: [{ translateX: x }, { rotate }] }}>
             <Pressable
@@ -229,9 +229,9 @@ export default function Today() {
               accessibilityLabel={`${cur.lead.firstName} ${cur.lead.lastName}. ${cur.reason}`}
               accessibilityHint="Opens the lead. Swipe left or right for the next lead."
               onPress={() => router.push(`/lead/${cur.lead.id}`)}
-              style={{ flex: 1, borderRadius: 2, backgroundColor: ink, padding: 22, gap: 14, overflow: 'hidden' }}>
+              style={{ flex: 1, borderRadius: 6, backgroundColor: ink, padding: 22, gap: 14, overflow: 'hidden' }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                <View style={{ backgroundColor: contactedToday(cur.lead) ? c.good : c.accent, borderRadius: 2, paddingHorizontal: 12, paddingVertical: 6 }}>
+                <View style={{ backgroundColor: contactedToday(cur.lead) ? c.good : c.accent, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6 }}>
                   <T w="bold" size={12} style={{ color: '#FFFFFF', letterSpacing: 0.6 }}>
                     {contactedToday(cur.lead) ? 'DONE TODAY' : `${STATUS_TEXT[cur.label].toUpperCase()}${since(cur.lead) ? ` · ${since(cur.lead).toUpperCase()}` : ''}`}
                   </T>
@@ -254,7 +254,7 @@ export default function Today() {
                 {cur.reason}
               </T>
               {cur.lead.aiOpener ? (
-                <View style={{ backgroundColor: veil, borderRadius: 2, padding: 14, gap: 4 }}>
+                <View style={{ backgroundColor: veil, borderRadius: 6, padding: 14, gap: 4 }}>
                   <T w="bold" size={11} style={{ color: c.heroAccent, letterSpacing: 0.8 }}>
                     OPEN WITH
                   </T>
@@ -269,11 +269,11 @@ export default function Today() {
                 <Fact label="IF IT CLOSES" value={cur.lead.fields.potentialCommission ? money(cur.lead.fields.potentialCommission) : '—'} ink={onInk} veil={veil} />
               </View>
               {home ? (
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: c.bg, borderRadius: 2, padding: 10 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: c.bg, borderRadius: 6, padding: 10 }}>
                   {home.photo ? (
-                    <Image source={{ uri: home.photo }} style={{ width: 58, height: 58, borderRadius: 2, backgroundColor: c.track }} accessibilityIgnoresInvertColors />
+                    <Image source={{ uri: home.photo }} style={{ width: 58, height: 58, borderRadius: 4, backgroundColor: c.track }} accessibilityIgnoresInvertColors />
                   ) : (
-                    <View style={{ width: 58, height: 58, borderRadius: 2, backgroundColor: c.track }} />
+                    <View style={{ width: 58, height: 58, borderRadius: 4, backgroundColor: c.track }} />
                   )}
                   <View style={{ flex: 1, minWidth: 0, gap: 1 }}>
                     <T w="bold" size={11} tone="accent" style={{ letterSpacing: 0.6 }}>
@@ -300,7 +300,7 @@ export default function Today() {
               accessibilityRole="button"
               accessibilityLabel={`Call ${cur.lead.firstName}`}
               onPress={() => callLead(cur.lead)}
-              style={({ pressed }) => ({ height: 60, flex: 1, maxWidth: 210, borderRadius: 2, backgroundColor: c.accent, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, opacity: pressed ? 0.85 : 1 })}>
+              style={({ pressed }) => ({ height: 60, flex: 1, maxWidth: 210, borderRadius: 6, backgroundColor: c.accent, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, opacity: pressed ? 0.85 : 1 })}>
               <Icon name="phone" size={20} color="#FFFFFF" />
               <T w="bold" size={17} numberOfLines={1} style={{ color: '#FFFFFF', flexShrink: 1 }}>
                 Call {cur.lead.firstName || 'now'}
@@ -309,7 +309,7 @@ export default function Today() {
             <RoundButton icon="text" label={`Text ${cur.lead.firstName}`} onPress={() => textLead(cur.lead)} solid />
           </View>
           <Pressable accessibilityRole="button" accessibilityLabel="Next lead" onPress={() => go(1)} style={{ position: 'absolute', right: -4, top: '42%', width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>
-            <View style={{ width: 30, height: 30, borderRadius: 2, backgroundColor: c.bg, alignItems: 'center', justifyContent: 'center', opacity: 0.9 }}>
+            <View style={{ width: 30, height: 30, borderRadius: 4, backgroundColor: c.bg, alignItems: 'center', justifyContent: 'center', opacity: 0.9 }}>
               <Icon name="chevron" size={16} color={c.text} width={2.6} />
             </View>
           </Pressable>
@@ -322,7 +322,7 @@ export default function Today() {
 function BigButton({ label, onPress }: { label: string; onPress: () => void }) {
   const { c } = useTheme();
   return (
-    <Pressable accessibilityRole="button" onPress={onPress} style={({ pressed }) => ({ height: 60, borderRadius: 2, backgroundColor: c.accent, alignItems: 'center', justifyContent: 'center', opacity: pressed ? 0.85 : 1 })}>
+    <Pressable accessibilityRole="button" onPress={onPress} style={({ pressed }) => ({ height: 60, borderRadius: 6, backgroundColor: c.accent, alignItems: 'center', justifyContent: 'center', opacity: pressed ? 0.85 : 1 })}>
       <T w="bold" size={17} style={{ color: '#FFFFFF' }}>
         {label}
       </T>
@@ -338,7 +338,7 @@ function RoundButton({ icon, label, onPress, solid, disabled }: { icon: 'back' |
       accessibilityLabel={label}
       disabled={disabled}
       onPress={onPress}
-      style={({ pressed }) => ({ width: 60, height: 60, borderRadius: 2, alignItems: 'center', justifyContent: 'center', backgroundColor: solid ? c.hero : c.card, borderWidth: solid ? 0 : 1.5, borderColor: c.sep, opacity: disabled ? 0.35 : pressed ? 0.7 : 1 })}>
+      style={({ pressed }) => ({ width: 60, height: 60, borderRadius: 6, alignItems: 'center', justifyContent: 'center', backgroundColor: solid ? c.hero : c.card, borderWidth: solid ? 0 : 1.5, borderColor: c.sep, opacity: disabled ? 0.35 : pressed ? 0.7 : 1 })}>
       <Icon name={icon} size={22} color={solid ? c.onHero : c.text} width={2.2} />
     </Pressable>
   );
@@ -346,7 +346,7 @@ function RoundButton({ icon, label, onPress, solid, disabled }: { icon: 'back' |
 
 function Fact({ label, value, ink, veil }: { label: string; value: string; ink: string; veil: string }) {
   return (
-    <View style={{ flex: 1, minWidth: 0, backgroundColor: veil, borderRadius: 2, paddingHorizontal: 10, paddingVertical: 8, gap: 1 }}>
+    <View style={{ flex: 1, minWidth: 0, backgroundColor: veil, borderRadius: 4, paddingHorizontal: 10, paddingVertical: 8, gap: 1 }}>
       <T w="bold" size={10} style={{ color: ink, opacity: 0.6, letterSpacing: 0.6 }}>
         {label}
       </T>
@@ -359,7 +359,7 @@ function Fact({ label, value, ink, veil }: { label: string; value: string; ink: 
 
 function Stat({ n, label, ink, veil, accent }: { n: number; label: string; ink: string; veil: string; accent?: string }) {
   return (
-    <View style={{ flex: 1, backgroundColor: veil, borderRadius: 2, padding: 10 }}>
+    <View style={{ flex: 1, backgroundColor: veil, borderRadius: 4, padding: 10 }}>
       <T w="heavy" size={22} style={{ color: accent ?? ink }}>
         {n}
       </T>

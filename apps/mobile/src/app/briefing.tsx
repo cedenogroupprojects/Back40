@@ -50,11 +50,11 @@ export default function Briefing() {
       <Card style={{ gap: 18 }}>
         <View style={{ height: 56, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
           {bars.map((h, i) => (
-            <View key={i} style={{ flex: 1, height: h, borderRadius: 2, backgroundColor: i <= progress && (playing || at > 0) ? c.accent : c.track }} />
+            <View key={i} style={{ flex: 1, height: h, borderRadius: 3, backgroundColor: i <= progress && (playing || at > 0) ? c.accent : c.track }} />
           ))}
         </View>
         <Row gap={28} style={{ justifyContent: 'center' }}>
-          <Pressable accessibilityRole="button" accessibilityLabel={playing ? 'Pause' : 'Play'} onPress={toggle} style={{ width: 72, height: 72, borderRadius: 2, backgroundColor: c.accent, alignItems: 'center', justifyContent: 'center' }}>
+          <Pressable accessibilityRole="button" accessibilityLabel={playing ? 'Pause' : 'Play'} onPress={toggle} style={{ width: 72, height: 72, borderRadius: 6, backgroundColor: c.accent, alignItems: 'center', justifyContent: 'center' }}>
             {playing ? (
               <Row gap={6}>
                 <View style={{ width: 6, height: 24, borderRadius: 2, backgroundColor: c.onAccent }} />
@@ -68,7 +68,7 @@ export default function Briefing() {
       </Card>
       {items.map((r, i) => (
         <Row key={r.lead.id} gap={12} style={{ alignItems: 'flex-start', opacity: at === 0 || at - 1 === i || !playing ? 1 : 0.6 }}>
-          <View style={{ width: 28, height: 28, borderRadius: 2, backgroundColor: i === 0 ? c.accent : c.soft, alignItems: 'center', justifyContent: 'center' }}>
+          <View style={{ width: 28, height: 28, borderRadius: 4, backgroundColor: i === 0 ? c.accent : c.soft, alignItems: 'center', justifyContent: 'center' }}>
             <T w="heavy" size={13} style={{ color: i === 0 ? c.onAccent : c.text }}>
               {i + 1}
             </T>

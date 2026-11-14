@@ -105,16 +105,16 @@ export default function LogCall() {
           Call with {lead.firstName} {lead.lastName}
         </T>
       </Pressable>
-      <View style={{ flex: 1, backgroundColor: c.bg, borderTopLeftRadius: 2, borderTopRightRadius: 2, overflow: 'hidden' }}>
+      <View style={{ flex: 1, backgroundColor: c.bg, borderTopLeftRadius: 6, borderTopRightRadius: 6, overflow: 'hidden' }}>
         <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: insets.bottom + 30, gap: 16 }}>
-          <View style={{ alignSelf: 'center', width: 40, height: 5, borderRadius: 2, backgroundColor: c.track }} />
+          <View style={{ alignSelf: 'center', width: 40, height: 5, borderRadius: 3, backgroundColor: c.track }} />
 
           {saved !== null ? (
             <View style={{ gap: 16 }}>
               <T w="heavy" size={22}>
                 Saved to {SOURCE_NAME[lead.crm]}.
               </T>
-              <View style={{ alignSelf: 'flex-start', backgroundColor: c.goodSoft, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 2 }}>
+              <View style={{ alignSelf: 'flex-start', backgroundColor: c.goodSoft, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 4 }}>
                 <T w="heavy" size={13} tone="good">
                   +{saved} to today's score
                 </T>
@@ -129,7 +129,7 @@ export default function LogCall() {
                       Send a recap text?
                     </T>
                   </Row>
-                  <T size={15} style={{ backgroundColor: c.soft, borderRadius: 2, padding: 12 }}>
+                  <T size={15} style={{ backgroundColor: c.soft, borderRadius: 4, padding: 12 }}>
                     {ex.recap}
                   </T>
                   <Row>
@@ -150,14 +150,14 @@ export default function LogCall() {
                 <T w="heavy" size={21} style={{ flex: 1 }}>
                   How'd it go?
                 </T>
-                <View style={{ backgroundColor: c.goodSoft, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 2 }}>
+                <View style={{ backgroundColor: c.goodSoft, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 4 }}>
                   <T w="heavy" size={12} tone="good">
                     +{pointsFor(outcome)}
                   </T>
                 </View>
               </Row>
 
-              <View style={{ flexDirection: 'row', backgroundColor: c.soft, borderRadius: 2, padding: 3 }}>
+              <View style={{ flexDirection: 'row', backgroundColor: c.soft, borderRadius: 4, padding: 3 }}>
                 {OUTCOMES.map((o) => {
                   const on = outcome === o.key;
                   return (
@@ -166,7 +166,7 @@ export default function LogCall() {
                       accessibilityRole="radio"
                       accessibilityState={{ selected: on }}
                       onPress={() => { tap(); setOutcome(o.key); }}
-                      style={{ flex: 1, minHeight: 40, borderRadius: 2, backgroundColor: on ? c.card : 'transparent', alignItems: 'center', justifyContent: 'center', boxShadow: on ? '0 1px 3px rgba(0,0,0,0.12)' : undefined }}>
+                      style={{ flex: 1, minHeight: 40, borderRadius: 4, backgroundColor: on ? c.card : 'transparent', alignItems: 'center', justifyContent: 'center', boxShadow: on ? '0 1px 3px rgba(0,0,0,0.12)' : undefined }}>
                       <T w={on ? 'bold' : 'medium'} size={14} style={{ color: on ? c.text : c.sub }}>
                         {o.label}
                       </T>
@@ -181,7 +181,7 @@ export default function LogCall() {
                     accessibilityRole="button"
                     accessibilityLabel="Record a voice note"
                     onPress={record}
-                    style={{ width: 44, height: 44, borderRadius: 2, backgroundColor: recording ? c.text : c.accent, alignItems: 'center', justifyContent: 'center' }}>
+                    style={{ width: 44, height: 44, borderRadius: 6, backgroundColor: recording ? c.text : c.accent, alignItems: 'center', justifyContent: 'center' }}>
                     <Icon name="mic" size={20} color={recording ? c.bg : c.onAccent} />
                   </Pressable>
                   <View style={{ flex: 1, gap: 4 }}>
