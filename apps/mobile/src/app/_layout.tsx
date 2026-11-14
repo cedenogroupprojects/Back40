@@ -30,6 +30,8 @@ function AppStack() {
         <Stack.Screen name="commission/[id]" options={{ presentation: 'transparentModal', animation: 'slide_from_bottom' }} />
         <Stack.Screen name="compose/[id]" options={{ presentation: 'modal' }} />
         <Stack.Screen name="admin" />
+        <Stack.Screen name="team" />
+        <Stack.Screen name="join" options={{ animation: 'fade' }} />
         <Stack.Screen name="nurture" />
         <Stack.Screen name="sign-in" options={{ animation: 'fade' }} />
         <Stack.Screen name="connect" />

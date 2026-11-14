@@ -66,6 +66,29 @@ export async function signUp(name: string, email: string, password: string, team
   if (error) throw new Error(error.message);
 }
 
+// ───────────────────────── Team invites ─────────────────────────
+
+export type InviteInfo = { team: string; leader: string; name: string | null; email: string | null; leads: number; used: boolean };
+export const inviteInfo = (token: string) => fn<InviteInfo>('team', { action: 'info', token });
+
+/** Sign up from an invite link: the account is created already on the team, then we sign in. */
+export async function joinWithInvite(token: string, name: string, email: string, password: string) {
+  await fn('account', { name, email, password, token });
+  await signIn(email, password);
+}
+
+/** Already have a login: sign in, then join the team with the link. */
+export async function signInAndJoin(token: string, email: string, password: string) {
+  await signIn(email, password);
+  await fn('team', { action: 'join', token });
+}
+
+export type TeamPerson = { crmUserId: string; name: string; email: string | null; status: 'joined' | 'invited' | 'none'; userId: string | null; leads: number };
+export const fetchRoster = () => fn<{ connected: boolean; crm?: string; people: TeamPerson[] }>('team', { action: 'roster' });
+export const makeInvite = (crmUserId: string) =>
+  fn<{ link: string; message: string }>('team', { action: 'invite', crmUserId, origin: typeof window !== 'undefined' && window.location ? window.location.origin : undefined });
+export const removeAgent = (userId: string) => fn('team', { action: 'remove', userId });
+
 export async function signOut() {
   await supabase().auth.signOut();
 }

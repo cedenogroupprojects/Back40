@@ -1,6 +1,6 @@
 // Me — connections and the rules that decide what counts as hot.
 import { router } from 'expo-router';
-import type { ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Pressable, Switch, View } from 'react-native';
 
 import { Icon } from '@/components/Icon';
@@ -59,6 +59,13 @@ export default function Me() {
   const { c, mode, setMode } = useTheme();
   const { settings, stages, updateSettings, isLiveMode, profile, signOut } = useStore();
   const canSetGoal = settings.role === 'owner' || settings.role === 'admin' || settings.role === 'solo';
+  const leader = settings.role === 'owner' || settings.role === 'admin';
+  const [roster, setRoster] = useState<{ joined: number; total: number } | null>(null);
+  useEffect(() => {
+    if (!leader || !isLiveMode) return;
+    live.fetchRoster().then((r) => setRoster({ joined: r.people.filter((p) => p.status === 'joined').length, total: r.people.length })).catch(() => {});
+  }, [leader, isLiveMode]);
+  const teamSub = roster && roster.total ? `Invite your agents · ${roster.joined} of ${roster.total} joined` : 'Invite your agents';
   const setNudge = (k: keyof Settings['nudges'], v: boolean) => updateSettings({ nudges: { ...settings.nudges, [k]: v } });
   const toggleStage = (s: string) => {
     const has = settings.rules.hotStages.includes(s);
@@ -77,6 +84,7 @@ export default function Me() {
 
       {settings.role === 'owner' || settings.role === 'admin' ? (
         <List>
+          <ListRow label="Team" sub={teamSub} onPress={() => router.push('/team')} />
           <ListRow label="Team admin" sub="Where your team's leads are, and who's going stale" onPress={() => router.push('/admin')} />
         </List>
       ) : null}
