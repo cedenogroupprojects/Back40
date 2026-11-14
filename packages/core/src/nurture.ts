@@ -178,17 +178,29 @@ export function closingQuestion(touch: Touch, f: LeadFields, variant: number, no
  * How the text opens. Every one sounds like the agent just found something for
  * this person and is excited to tell them. Varied so leads don't all get the same line.
  */
-export function openingAngle(touch: Touch, variant: number): string {
+export function openingAngle(touch: Touch, variant: number, rapport = true): string {
   if (touch === 'discovery') return '';
   const angles = [
     'Open like you think you found THE one for them (e.g. "Daniel!! I think I found it.").',
     'Open like you know they will love it (e.g. "Ann, ok you\'re going to love this one.").',
     'Open like you just came across it (e.g. "Hey Chris, just came across one that hasn\'t hit the market.").',
-    'Open like it made you think of them (e.g. "Saw this come up today and thought of you.").',
+    rapport
+      ? 'Open like it made you think of them (e.g. "Saw this come up today and thought of you.").'
+      : 'Open with what just happened, casually (e.g. "This one just came up today.").',
     'Open with the one detail that makes it exciting, casually (e.g. "Pool, spa, AND a bedroom downstairs.").',
     'Open with a quick, casual heads-up (e.g. "Hey Francisco, quick one.").',
   ];
   return angles[Math.abs(Math.floor(variant / 7)) % angles.length]!;
+}
+
+/**
+ * Have we actually talked with this person? Past the first-contact stages, or the
+ * agent has notes from a conversation. Without that, "thought of you" reads as fake.
+ */
+export function hasRapport(stage: string, history: string[]): boolean {
+  const st = classifyStage(stage);
+  if (st.kind === 'active' && st.phase >= 2) return true;
+  return history.some((h) => /\bnote\b|talked/i.test(h));
 }
 
 /** A casual way to say who's texting, only when they might not know: "It's Jeffry from IG 👋". */
@@ -234,7 +246,8 @@ export function nurturePrompt(c: DraftContext): string {
     discovery: `Nothing to share yet. Send a short, friendly text that asks ${ask}, the way you'd ask a friend. Give them a reason to answer (e.g. you can send them homes before they hit Zillow). No intro speech.`,
   }[c.touch];
   const closing = closingQuestion(c.touch, f, c.variant ?? c.step, c.now);
-  const opening = openingAngle(c.touch, c.variant ?? c.step);
+  const rapport = hasRapport(c.lead.stage, c.history);
+  const opening = openingAngle(c.touch, c.variant ?? c.step, rapport);
   const intro = introLine(c.agentName, c.lead.source);
   const first = c.agentName.split(' ')[0] || c.agentName;
   return `You are ${first}, a real estate agent, texting a lead from your own phone. Write THREE different texts you'd actually send, so the agent can pick the one that sounds most like them.
@@ -253,10 +266,11 @@ HOW IT SHOULD SOUND (these are the style to match; never reuse their facts):
 "Ann, ok you're going to love this one. Heated pool, spa, and a full bedroom downstairs in Ontario. It's not listed yet. Want me to get you in?"
 "Hey Chris, just came across a Corona home that hasn't hit the market. $585K. Honestly think it's worth a look before it goes live. You around this weekend?"
 "Francisco, this one just listed in Corona. 3 bed with solar for $569K. Want me to send you the pics?"
-"Hey! ${intro} 👋 Saw a Fontana home come up today under $500K on a huge lot and thought of you. Still looking out that way?"
+"Hey! ${intro} 👋 Saw a Fontana home come up today under $500K on a huge lot. Still looking out that way?"
 
 - Two or three short sentences, like a real text. Loose and human: "ok", "honestly", "!!" or one emoji are fine when they fit; perfect grammar is not the goal.
-- Sound like YOU found it for THEM: "I think I found it", "you're going to love this", "thought of you". Never sound like an alert or a listing.
+- Sound like YOU found it for THEM: "I think I found it", "you're going to love this"${rapport ? ', "thought of you"' : ''}. Never sound like an alert or a listing.
+${rapport ? '' : `- You haven't really talked with this person yet. Never write "thought of you", "made me think of you", "reminded me of you" or anything that implies you know them well.\n`}
 - Pick the ONE or TWO details that matter (pool, single story, big lot, not on the market yet, under a price). Never list specs like a listing sheet; no square footage unless it is the whole point.
 - Never mention utilities or finishes: water heaters, HVAC, sinks, flooring, laminate, paint, appliances.
 - No self-introduction speeches. Never write "This is ${first}, the Realtor", "${first} here", "I'm a real estate agent" or "I wanted to reach out". ${c.step === 0 ? `If they might not know who's texting, you may slip in "${intro}" casually, like the last example. Most texts don't need it.` : 'They already know who you are; don\'t introduce yourself.'}

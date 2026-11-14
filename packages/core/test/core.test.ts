@@ -251,3 +251,12 @@ test('GoHighLevel contacts take their stage from the open opportunity', async ()
   assert.equal(l.fields.doNotText, true);
   assert.equal(mapGhlContact({ id: 'c2', tags: ['b40:Showing Homes'] }).stage, 'Showing Homes');
 });
+
+test('"thought of you" only for leads we have actually talked with', async () => {
+  const n = await import('../src/nurture.ts');
+  assert.equal(n.hasRapport('Attempted Contact', []), false);
+  assert.equal(n.hasRapport('New Leads', ['2026-11-01 text: Back 40 texted']), false);
+  assert.equal(n.hasRapport('Appointment Set', []), true);
+  assert.equal(n.hasRapport('New Leads', ['2026-11-02 note: Note · Jeffry — wants Fontana']), true);
+  for (const v of [0, 7, 14, 21, 28, 35]) assert.ok(!/thought of you/.test(n.openingAngle('teaser', v, false)));
+});
